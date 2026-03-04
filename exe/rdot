@@ -1,0 +1,9 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+gem_root = File.expand_path('..', __dir__)
+require 'bundler/setup' if File.exist?(File.join(gem_root, 'Gemfile'))
+load File.expand_path('lib/red_dot.rb', gem_root)
+
+parsed = RedDot::Cli.parse(ARGV)
+RedDot.run(working_dir: parsed[:working_dir], option_overrides: parsed[:option_overrides])
