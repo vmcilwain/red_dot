@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
   spec.email = ['']
 
   spec.summary = 'Terminal UI for running RSpec tests (hopefully easier)'
-  spec.description = 'A lazy-like TUI for running RSpec tests: select files, set options (tags, format, output, seed), " \
-  "run all/some/one, view results, and rerun.'
+  spec.description = 'A lazy-like TUI for running RSpec tests: select files, set options ' \
+                     '(tags, format, output, seed), run all/some/one, view results, and rerun.'
   spec.homepage = 'https://github.com/vmcilwain/red_dot'
   spec.required_ruby_version = '>= 3.2.0'
   spec.licenses = ['MIT']
