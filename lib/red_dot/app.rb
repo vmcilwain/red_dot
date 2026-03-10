@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'set'
 require 'bubbletea'
 require 'lipgloss'
 
@@ -105,9 +104,9 @@ module RedDot
       @options[:line_number] = o[:line_number].to_s if o.key?(:line_number)
       @options[:fail_fast] = o[:fail_fast] ? true : false if o.key?(:fail_fast)
       @options[:seed] = o[:seed].to_s if o.key?(:seed)
-      if o.key?(:editor) && RedDot::Config::VALID_EDITORS.include?(o[:editor].to_s.strip.downcase)
-        @options[:editor] = o[:editor].to_s.strip.downcase
-      end
+      return unless o.key?(:editor) && RedDot::Config::VALID_EDITORS.include?(o[:editor].to_s.strip.downcase)
+
+      @options[:editor] = o[:editor].to_s.strip.downcase
     end
 
     def update(message)
@@ -140,6 +139,7 @@ module RedDot
           read_run_output
           pid_done = Process.wait(@run_pid, Process::WNOHANG) rescue nil
           if pid_done
+            drain_run_output
             @run_stdout&.close
             @run_stdout = nil
             @run_pid = nil
@@ -252,7 +252,9 @@ module RedDot
           return [self, nil]
         when '3'
           @options_focus = false
-          if @last_result
+          if @run_pid
+            @screen = :running
+          elsif @last_result
             @screen = :results
           end
           return [self, nil]
@@ -270,11 +272,7 @@ module RedDot
         end
         [self, nil]
       when :running
-        if ['q', 'ctrl+c'].include?(key)
-          kill_run
-          @screen = :file_list
-        end
-        [self, nil]
+        handle_running_key(key)
       when :results
         handle_results_key(key)
       else
@@ -365,9 +363,7 @@ module RedDot
         @cursor = [@cursor, list.size - 1].min
         [self, nil]
       when ' ', 'space'
-        if row&.file_row?
-          @selected[row.path] = !@selected[row.path]
-        end
+        @selected[row.path] = !@selected[row.path] if row&.file_row?
         [self, nil]
       when 'enter'
         run_specs(paths_for_run)
@@ -422,6 +418,7 @@ module RedDot
       if message.respond_to?(:enter?) && message.enter?
         row = list[@cursor]
         return run_specs([row.runnable_path]) if row
+
         return [self, nil]
       end
       key = message.to_s
@@ -435,11 +432,11 @@ module RedDot
       visible_list_height = file_list_visible_height(content_h)
       max_scroll = [list.size - visible_list_height, 0].max
       case key
-      when 'up', 'k'
+      when 'up'
         max_idx = [list.size - 1, 0].max
         @cursor = [[@cursor - 1, 0].max, max_idx].min
         return [self, nil]
-      when 'down', 'j'
+      when 'down'
         max_idx = [list.size - 1, 0].max
         @cursor = [[@cursor + 1, max_idx].min, 0].max
         return [self, nil]
@@ -451,16 +448,22 @@ module RedDot
         @cursor = [@cursor + visible_list_height, [list.size - 1, 0].max].min
         @file_list_scroll_offset = [@file_list_scroll_offset + visible_list_height, max_scroll].min
         return [self, nil]
-      when 'home', 'g'
+      when 'home'
         @cursor = 0
         @file_list_scroll_offset = 0
         return [self, nil]
-      when 'end', 'G'
+      when 'end'
         @cursor = [list.size - 1, 0].max
         @file_list_scroll_offset = max_scroll
         return [self, nil]
       end
-      if message.respond_to?(:char) && (c = message.char) && c.is_a?(String) && !c.empty?
+      c = nil
+      if message.respond_to?(:char) && (ch = message.char) && ch.is_a?(String) && !ch.empty?
+        c = ch
+      elsif key.length == 1 && key.match?(/\S/)
+        c = key
+      end
+      if c
         @find_buffer += c
         list = display_rows
         @cursor = 0 if list.any? && (@cursor >= list.size || @cursor.negative?)
@@ -562,6 +565,45 @@ module RedDot
         [self, nil]
       end
       [self, nil]
+    end
+
+    def run_output_visible_height(content_h)
+      [content_h - 4, 1].max
+    end
+
+    def handle_running_key(key)
+      content_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
+      run_visible = run_output_visible_height(content_h)
+      max_scroll = [@run_output.size - run_visible, 0].max
+      case key
+      when 'q', 'ctrl+c'
+        kill_run
+        @screen = :file_list
+        [self, nil]
+      when '2'
+        @screen = :file_list
+        [self, nil]
+      when 'up', 'k'
+        @run_output_scroll = [@run_output_scroll - 1, 0].max
+        [self, nil]
+      when 'down', 'j'
+        @run_output_scroll = [@run_output_scroll + 1, max_scroll].min
+        [self, nil]
+      when 'pgup', 'ctrl+u'
+        @run_output_scroll = [@run_output_scroll - run_visible, 0].max
+        [self, nil]
+      when 'pgdown', 'ctrl+d'
+        @run_output_scroll = [@run_output_scroll + run_visible, max_scroll].min
+        [self, nil]
+      when 'home', 'g'
+        @run_output_scroll = 0
+        [self, nil]
+      when 'end', 'G'
+        @run_output_scroll = max_scroll
+        [self, nil]
+      else
+        [self, nil]
+      end
     end
 
     def handle_results_key(key)
@@ -693,9 +735,7 @@ module RedDot
         show_file = file_matches || example_matches.any?
         next unless show_file
 
-        if example_matches.any?
-          @expanded_files.add(path)
-        end
+        @expanded_files.add(path) if example_matches.any?
         rows << DisplayRow.new(type: :file, path: path, line_number: nil, full_description: nil)
         examples_to_show = file_matches ? examples : example_matches
         examples_to_show.each do |ex|
@@ -764,7 +804,8 @@ module RedDot
                  out_path: out_path, example_filter: example_filter, fail_fast: @options[:fail_fast], seed: seed }
         proc = lambda do
           data = RspecRunner.spawn(**opts)
-          RspecStartedMessage.new(pid: data[:pid], stdout_io: data[:stdout_io], json_path: data[:json_path], component_root: g[:component_root])
+          RspecStartedMessage.new(pid: data[:pid], stdout_io: data[:stdout_io], json_path: data[:json_path],
+                                  component_root: g[:component_root])
         end
         return [self, proc]
       end
@@ -775,7 +816,8 @@ module RedDot
                out_path: out_path, example_filter: example_filter, fail_fast: @options[:fail_fast], seed: seed }
       proc = lambda do
         data = RspecRunner.spawn(**opts)
-        RspecStartedMessage.new(pid: data[:pid], stdout_io: data[:stdout_io], json_path: data[:json_path], component_root: first[:component_root])
+        RspecStartedMessage.new(pid: data[:pid], stdout_io: data[:stdout_io], json_path: data[:json_path],
+                                component_root: first[:component_root])
       end
       [self, proc]
     end
@@ -834,11 +876,44 @@ module RedDot
     def read_run_output
       return unless @run_stdout
 
+      content_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
+      run_visible = run_output_visible_height(content_h)
+      was_at_bottom = @run_output.size <= run_visible || @run_output_scroll >= [@run_output.size - run_visible, 0].max
+
       @run_stdout.read_nonblock(4096).each_line do |line|
         @run_output << line.chomp
       end
+
+      return unless was_at_bottom
+
+      max_scroll = [@run_output.size - run_visible, 0].max
+      @run_output_scroll = max_scroll
     rescue IO::WaitReadable, EOFError
       # no more data
+    end
+
+    def drain_run_output
+      return unless @run_stdout
+
+      content_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
+      run_visible = run_output_visible_height(content_h)
+      was_at_bottom = @run_output.size <= run_visible || @run_output_scroll >= [@run_output.size - run_visible, 0].max
+
+      loop do
+        chunk = @run_stdout.read(4096)
+        break if chunk.nil? || chunk.empty?
+
+        chunk.each_line do |line|
+          @run_output << line.chomp
+        end
+      end
+
+      return unless was_at_bottom
+
+      max_scroll = [@run_output.size - run_visible, 0].max
+      @run_output_scroll = max_scroll
+    rescue IOError, Errno::EPIPE
+      # pipe closed or broken
     end
 
     def kill_run
@@ -846,6 +921,7 @@ module RedDot
 
       Process.kill('TERM', @run_pid) rescue nil
       Process.wait(@run_pid) rescue nil
+      drain_run_output
       @run_stdout&.close
       @run_stdout = nil
       @run_pid = nil
@@ -971,7 +1047,7 @@ module RedDot
 
       case @screen
       when :indexing then build_indexing_lines
-      when :running then build_running_lines
+      when :running then build_running_lines(content_h)
       when :results then build_results_lines(content_h)
       else build_idle_lines
       end
@@ -1050,14 +1126,18 @@ module RedDot
       [title, '', options_row, help_row, '']
     end
 
-    def build_running_lines
+    def build_running_lines(content_h)
+      run_visible = run_output_visible_height(content_h)
+      max_scroll = [@run_output.size - run_visible, 0].max
+      @run_output_scroll = [@run_output_scroll, max_scroll].min
+      window = @run_output[@run_output_scroll, run_visible] || []
       title = ' 3  Running RSpec '
       [
         (focused_panel == 3 ? @active_title_style.render(title) : @inactive_title_style.render(title)),
         '',
-        *@run_output.last(50).map { |l| "  #{l}" },
+        *window.map { |l| "  #{l}" },
         '',
-        @help_style.render('  q: quit (kill run)')
+        @help_style.render('  j/k: scroll  PgUp/PgDn  g/G: top/bottom  2: file list  q: kill run')
       ]
     end
 
@@ -1076,6 +1156,12 @@ module RedDot
         lines << @muted_style.render("  #{metrics.join('  |  ')}")
         if r.errors_outside_of_examples.positive?
           lines << @warn_style.render("  #{r.errors_outside_of_examples} error(s) outside examples (e.g. load/hook failures)")
+          if @run_output.any?
+            lines << ''
+            lines << @muted_style.render('  Output:')
+            @run_output.each { |out_line| lines << "    #{out_line}" }
+            lines << ''
+          end
         end
         lines << ''
         if r.examples_with_run_time.any?
@@ -1145,7 +1231,7 @@ module RedDot
 
     def status_line
       return ' Enter line number, Enter: run  Esc: cancel ' if @input_prompt
-      return ' j/k: move  PgUp/PgDn: scroll  g/G: top/bottom  Enter: run  Esc or Ctrl+B: exit find ' if @find_buffer
+      return ' ↑/↓: move  PgUp/PgDn: scroll  Home/End: top/bottom  Enter: run  Esc or Ctrl+B: exit find ' if @find_buffer
 
       case @screen
       when :file_list
@@ -1155,7 +1241,7 @@ module RedDot
           ' 1/2/3: panels  /: find  I: index  j/k: move  PgUp/PgDn  g/G: top/bottom  ]/[: expand  a: all  s: selected  e: run  O: open  f: failed  o: options  R: refresh  q: quit '
         end
       when :indexing then '  Indexing specs for search...  q / Esc: cancel '
-      when :running then ' 1/2/3: panels  q: kill run '
+      when :running then ' 1/2/3: panels  j/k PgUp/PgDn g/G: scroll output  2: file list  q: kill run '
       when :results then ' 1/2/3: panels  j/k: move  PgUp/PgDn: scroll  g/G: top/bottom  e: run  O: open  b: back  r: rerun  f: failed  q: quit '
       else ' 1/2/3: panels  q: quit '
       end

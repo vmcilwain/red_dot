@@ -129,7 +129,7 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 
 - **File list**: Browse spec files; press **→** to expand a file (list its tests) and **←** to collapse. Press **I** to **index** all spec files (builds a searchable cache with a progress bar; run once so find can match test names without expanding). Select files with Space, run with Enter or `s` (selected), `a` (all), `e` (run at line on a file, or run the focused example when on an example row), `f` (failed, after a run with failures). Use **/** to find; search matches file paths and test names for indexed (or expanded) files — put the cursor on a matched example and press Enter to run just that test. **Esc** or **Enter** exits find and collapses all files. Use **]** to expand all files and **\[** to collapse all.
 - **Options** (top bar): Always visible. Press `o` to focus; ←/→ or j/k to move, Enter to edit a field or toggle fail-fast; `b` or Esc to unfocus.
-- **Running**: See live RSpec output in the right panel. Press `q` to kill the run and return to the file list.
+- **Running**: See live RSpec output in the right panel. Press **`3`** to focus the output pane (if you switched to the file list). Use **j/k**, **PgUp/PgDn**, **g/G** to scroll the output; **`2`** to switch back to the file list. Press **`q`** to kill the run and return to the file list.
 - **Results**: In the right panel; j/k to move over failures, `e` to run that single example (path:line), `O` to open that file in your configured editor, `r` to rerun same scope, `f` to rerun only failed examples.
 
 ### Key bindings
@@ -138,7 +138,7 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 |-----|--------|
 | **1** | Focus panel 1 (Options) |
 | **2** | Focus panel 2 (Spec files) |
-| **3** | Focus panel 3 (Output/Results; only when results exist) |
+| **3** | Focus panel 3 (Output/Results when results exist; Running output when a run is in progress) |
 | q / Esc | Quit |
 
 | Key | Action (file list — panel 2) |
@@ -168,6 +168,14 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 | Enter | Edit field, toggle fail-fast, or cycle editor (vscode/cursor/textmate) |
 | b / Esc | Unfocus options, back to file list |
 | q | Quit |
+
+| Key | Action (running output — panel 3, during a run) |
+|-----|--------------------------------------------------|
+| j / k | Scroll output up/down |
+| PgUp / PgDn | Page scroll |
+| g / G | Jump to top/bottom of output |
+| 2 | Switch to file list (run continues in background) |
+| q | Kill run and return to file list |
 
 | Key | Action (results — panel 3) |
 |-----|----------------------------|
