@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 module RedDot
+  # Parses argv into working_dir and option_overrides (format, tags, out_path, example_filter, line_number, fail_fast).
   class Cli
+    # @return [Hash] { working_dir:, option_overrides: }
     def self.parse(argv = ARGV)
       args = argv.dup
       overrides = {}

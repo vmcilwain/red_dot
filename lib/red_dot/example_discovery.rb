@@ -6,11 +6,13 @@ require 'json'
 require 'tmpdir'
 
 module RedDot
+  # Discovers and caches example names (e.g. for find). ExampleInfo: path, line_number, full_description.
   class ExampleDiscovery
     ExampleInfo = Struct.new(:path, :line_number, :full_description, keyword_init: true)
 
     CACHE_DIR = File.join(Dir.tmpdir, 'red_dot').freeze
 
+    # @return [String] path to JSON cache for working_dir
     def self.cache_file_path(working_dir)
       hash = Digest::SHA256.hexdigest(File.expand_path(working_dir))[0, 16]
       File.join(CACHE_DIR, "cache_#{hash}.json")
@@ -29,6 +31,7 @@ module RedDot
       {}
     end
 
+    # @return [Array<ExampleInfo>, nil] cached examples if mtime matches, else nil
     def self.get_cached_examples(working_dir, path)
       full_path = File.join(working_dir, path)
       return nil unless File.exist?(full_path)
@@ -63,6 +66,7 @@ module RedDot
       File.write(cache_file_path(working_dir), JSON.generate({ 'entries' => entries }))
     end
 
+    # Runs rspec --dry-run, parses JSON, caches and returns ExampleInfo list.
     def self.discover(working_dir:, path:)
       json_path = RspecRunner.run_dry_run(working_dir: working_dir, paths: [path])
       return [] unless json_path && File.readable?(json_path)

@@ -3,6 +3,7 @@
 require 'json'
 
 module RedDot
+  # Parsed RSpec JSON result. Example: description, status, file_path, line_number, run_time, etc.
   class RspecResult
     Example = Struct.new(
       :description, :full_description, :status, :file_path, :line_number, :exception_message,
@@ -19,6 +20,7 @@ module RedDot
       @seed = seed
     end
 
+    # @return [RspecResult, nil] parsed from JSON file
     def self.from_json_path(path)
       return nil unless path && File.readable?(path)
 

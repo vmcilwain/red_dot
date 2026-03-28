@@ -4,6 +4,7 @@ require 'bubbletea'
 require 'lipgloss'
 
 module RedDot
+  # One row in the file/example list. { type: :file | :example, path, line_number, full_description }.
   DisplayRow = Struct.new(:type, :path, :line_number, :full_description, keyword_init: true) do
     def file_row?
       type == :file
@@ -13,6 +14,7 @@ module RedDot
       type == :example
     end
 
+    # Path to run: path for file, path:line for example.
     def runnable_path
       example_row? ? "#{path}:#{line_number}" : path
     end
@@ -22,6 +24,7 @@ module RedDot
     end
   end
 
+  # Message sent when an RSpec run has started. Carries pid, stdout IO, JSON path, optional component_root.
   class RspecStartedMessage < Bubbletea::Message
     attr_reader :pid, :stdout_io, :json_path, :component_root
 
@@ -35,6 +38,7 @@ module RedDot
 
   class TickMessage < Bubbletea::Message; end
 
+  # Bubbletea model: TUI for browsing and running RSpec.
   class App
     include Bubbletea::Model
 
@@ -42,6 +46,8 @@ module RedDot
     OPTIONS_BAR_HEIGHT = 5
     STATUS_HEIGHT = 1
 
+    # @param working_dir [String] project root
+    # @param option_overrides [Hash] merged into loaded config (e.g. :tags, :format, :fail_fast)
     def initialize(working_dir: Dir.pwd, option_overrides: {})
       @working_dir = File.expand_path(working_dir)
       @discovery = SpecDiscovery.new(working_dir: @working_dir)
@@ -85,10 +91,12 @@ module RedDot
       setup_styles
     end
 
+    # @return [Array<(self, nil)>]
     def init
       [self, nil]
     end
 
+    # Merges overrides into @options (tags, format, out_path, fail_fast, seed, editor, etc.).
     def apply_option_overrides(overrides)
       return if overrides.nil? || overrides.empty?
 
@@ -109,6 +117,7 @@ module RedDot
       @options[:editor] = o[:editor].to_s.strip.downcase
     end
 
+    # Handles WindowSizeMessage, RspecStartedMessage, TickMessage, KeyMessage, MouseMessage. Returns [self, nil] or [self, cmd].
     def update(message)
       case message
       when Bubbletea::WindowSizeMessage
@@ -177,11 +186,14 @@ module RedDot
         end
       when Bubbletea::KeyMessage
         handle_key(message)
+      when Bubbletea::MouseMessage
+        handle_mouse(message)
       else
         [self, nil]
       end
     end
 
+    # Full rendered TUI string (options bar + main panels + status).
     def view
       content_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
       left_w = [(LEFT_PANEL_RATIO * @width).floor, 24].max
@@ -237,9 +249,15 @@ module RedDot
 
     def handle_key(message)
       return handle_input_prompt_key(message) if @input_prompt
-      return handle_find_key(message) if @find_buffer
 
       key = message.to_s
+      if @screen == :running && @run_pid && ['q', 'ctrl+c'].include?(key)
+        kill_run
+        @screen = :file_list
+        return [self, nil]
+      end
+      return handle_find_key(message) if @find_buffer
+
       unless @options_editing
         case key
         when '1'
@@ -278,6 +296,34 @@ module RedDot
       else
         [self, nil]
       end
+    end
+
+    def handle_mouse(message)
+      return [self, nil] unless message.wheel?
+
+      content_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
+      left_w = [(LEFT_PANEL_RATIO * @width).floor, 24].max
+      in_spec_list = message.x < left_w && message.y >= OPTIONS_BAR_HEIGHT && message.y < @height - STATUS_HEIGHT
+      return [self, nil] unless in_spec_list
+
+      list = display_rows
+      visible_list_height = file_list_visible_height(content_h)
+      max_scroll = [list.size - visible_list_height, 0].max
+      return [self, nil] if max_scroll <= 0
+
+      case message.button
+      when Bubbletea::MouseMessage::BUTTON_WHEEL_UP
+        @cursor = [[@cursor - 1, 0].max, list.size - 1].min
+        @file_list_scroll_offset = [@file_list_scroll_offset - 1, 0].max
+        @file_list_scroll_offset = @cursor if @cursor < @file_list_scroll_offset
+      when Bubbletea::MouseMessage::BUTTON_WHEEL_DOWN
+        @cursor = [[@cursor + 1, list.size - 1].min, 0].max
+        @file_list_scroll_offset = [@file_list_scroll_offset + 1, max_scroll].min
+        if @cursor >= @file_list_scroll_offset + visible_list_height
+          @file_list_scroll_offset = @cursor - visible_list_height + 1
+        end
+      end
+      [self, nil]
     end
 
     def file_list_visible_height(content_h)
@@ -516,6 +562,9 @@ module RedDot
       case key
       when 'q', 'ctrl+c'
         [self, Bubbletea.quit]
+      when 'R'
+        refresh_spec_list
+        [self, nil]
       when 'esc', 'b'
         @options_focus = false
         [self, nil]
@@ -1236,7 +1285,7 @@ module RedDot
       case @screen
       when :file_list
         if @options_focus
-          ' 1/2/3: panels  j/k: move  Enter: edit  b: back  q: quit '
+          ' 1/2/3: panels  j/k: move  Enter: edit  R: refresh  b: back  q: quit '
         else
           ' 1/2/3: panels  /: find  I: index  j/k: move  PgUp/PgDn  g/G: top/bottom  ]/[: expand  a: all  s: selected  e: run  O: open  f: failed  o: options  R: refresh  q: quit '
         end

@@ -3,6 +3,7 @@
 require 'yaml'
 
 module RedDot
+  # Loads and merges options from user and project config.
   class Config
     VALID_EDITORS = %w[vscode cursor textmate].freeze
 
@@ -18,15 +19,18 @@ module RedDot
       editor: 'cursor'
     }.freeze
 
+    # @return [String] XDG/config or ~/.config/red_dot/config.yml
     def self.user_config_path
       base = ENV.fetch('XDG_CONFIG_HOME', File.join(Dir.home, '.config'))
       File.join(base, 'red_dot', 'config.yml')
     end
 
+    # @return [String] working_dir/.red_dot.yml
     def self.project_config_path(working_dir)
       File.join(File.expand_path(working_dir), '.red_dot.yml')
     end
 
+    # Merges user + project config. @return [Hash] options (tags, format, out_path, etc.)
     def self.load(working_dir: Dir.pwd)
       opts = DEFAULT_OPTIONS.dup
       project_path = project_config_path(working_dir)
@@ -37,6 +41,7 @@ module RedDot
       opts
     end
 
+    # Merges YAML at path into opts. @return [Hash]
     def self.merge_file(opts, path)
       return opts unless path && File.readable?(path)
 
@@ -71,6 +76,7 @@ module RedDot
       end
     end
 
+    # @return [Array<String>, nil] component root dirs from .red_dot.yml, or nil
     def self.component_roots(working_dir: Dir.pwd)
       path = project_config_path(working_dir)
       return nil unless File.readable?(path)
