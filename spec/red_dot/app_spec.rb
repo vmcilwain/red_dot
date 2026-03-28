@@ -17,7 +17,7 @@ RSpec.describe RedDot::App do
   end
   let(:options) do
     { tags: [], tags_str: '', format: 'progress', out_path: '', example_filter: '', line_number: '',
-      fail_fast: false, seed: '', editor: 'cursor' }
+      fail_fast: false, full_output: false, seed: '', editor: 'cursor' }
   end
 
   before do
@@ -61,6 +61,11 @@ RSpec.describe RedDot::App do
         a = described_class.new(working_dir: working_dir, option_overrides: { fail_fast: true })
         expect(a.send(:instance_variable_get, :@options)[:fail_fast]).to be true
       end
+
+      it 'applies full_output' do
+        a = described_class.new(working_dir: working_dir, option_overrides: { full_output: true })
+        expect(a.send(:instance_variable_get, :@options)[:full_output]).to be true
+      end
     end
   end
 
@@ -103,6 +108,29 @@ RSpec.describe RedDot::App do
     context 'with Bubbletea::KeyMessage' do
       def key_msg(key)
         Bubbletea::KeyMessage.new(key_type: Bubbletea::KeyMessage::KEY_RUNES, runes: [key.ord])
+      end
+
+      it 'does not route results keys through find when find was left active' do
+        mk = lambda do |line|
+          RedDot::RspecResult::Example.new(
+            description: 'fails', full_description: 'x', status: :failed,
+            file_path: 'spec/foo_spec.rb', line_number: line, exception_message: 'e',
+            run_time: nil, pending_message: nil
+          )
+        end
+        result = RedDot::RspecResult.new(
+          summary_line: '2 examples, 2 failures',
+          examples: [mk.call(1), mk.call(2)],
+          duration: 0.1
+        )
+        app.send(:instance_variable_set, :@screen, :results)
+        app.send(:instance_variable_set, :@find_buffer, 'foo')
+        app.send(:instance_variable_set, :@last_result, result)
+        app.send(:instance_variable_set, :@results_cursor, 0)
+        app.send(:instance_variable_set, :@results_total_lines, 5)
+        app.update(key_msg('j'))
+        expect(app.send(:instance_variable_get, :@find_buffer)).to eq('foo')
+        expect(app.send(:instance_variable_get, :@results_cursor)).to eq(1)
       end
 
       it 'quits on q' do
@@ -151,6 +179,11 @@ RSpec.describe RedDot::App do
       app.send(:apply_option_overrides, nil)
       app.send(:apply_option_overrides, {})
       expect(app_options[:format]).to eq('progress')
+    end
+
+    it 'applies full_output' do
+      app.send(:apply_option_overrides, { full_output: true })
+      expect(app_options[:full_output]).to be true
     end
 
     it 'sets editor only when valid' do

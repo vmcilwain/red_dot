@@ -9,10 +9,10 @@ Gem::Specification.new do |spec|
   spec.email = ['']
 
   spec.summary = 'Terminal UI for running RSpec tests (hopefully easier)'
-  spec.description = 'A lazy-like TUI for running RSpec tests: select files, set options ' \
+  spec.description = 'A lazy-like TUI for running RSpec tests (similar to VSCode Test Explorer): select files, set options ' \
                      '(tags, format, output, seed), run all/some/one, view results, and rerun.'
   spec.homepage = 'https://github.com/vmcilwain/red_dot'
-  spec.required_ruby_version = '>= 3.2.0'
+  spec.required_ruby_version = '>= 3.3.0'
   spec.licenses = ['MIT']
 
   spec.metadata['homepage_uri'] = spec.homepage
@@ -26,6 +26,4 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'bubbletea', '~> 0.1'
   spec.add_dependency 'lipgloss', '~> 0.1'
-
-  spec.add_development_dependency 'rspec', '~> 3.12'
 end

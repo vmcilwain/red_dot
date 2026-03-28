@@ -54,5 +54,10 @@ RSpec.describe RedDot::Cli do
       result = described_class.parse(%w[--fail-fast])
       expect(result[:option_overrides][:fail_fast]).to be true
     end
+
+    it 'parses --full-output' do
+      result = described_class.parse(%w[--full-output])
+      expect(result[:option_overrides][:full_output]).to be true
+    end
   end
 end

@@ -15,6 +15,7 @@ module RedDot
       example_filter: '',
       line_number: '',
       fail_fast: false,
+      full_output: false,
       seed: '',
       editor: 'cursor'
     }.freeze
@@ -58,6 +59,7 @@ module RedDot
       opts[:example_filter] = raw['example_filter'].to_s if raw.key?('example_filter')
       opts[:line_number] = raw['line_number'].to_s if raw.key?('line_number')
       opts[:fail_fast] = raw['fail_fast'] ? true : false if raw.key?('fail_fast')
+      opts[:full_output] = raw['full_output'] ? true : false if raw.key?('full_output')
       opts[:seed] = raw['seed'].to_s.strip if raw.key?('seed')
       if raw.key?('editor')
         val = raw['editor'].to_s.strip.downcase

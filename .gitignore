@@ -16,3 +16,4 @@ Rakefile.lock
 .rubocop-*
 .DS_Store
 /.cursor
+/tmp
