@@ -3,15 +3,18 @@
 require 'pathname'
 
 module RedDot
+  # Finds spec files and run context (single project or umbrella with components/).
   class SpecDiscovery
     DEFAULT_SPEC_DIR = 'spec'
     DEFAULT_PATTERN = '**/*_spec.rb'
     COMPONENTS_DIR = 'components'
 
+    # @param working_dir [String] project root
     def initialize(working_dir: Dir.pwd)
       @working_dir = File.expand_path(working_dir)
     end
 
+    # True if working_dir/components/ exists.
     def umbrella?
       components_dir = File.join(@working_dir, COMPONENTS_DIR)
       File.directory?(components_dir)
@@ -59,6 +62,7 @@ module RedDot
       read_default_path_from_rspec(@working_dir) || DEFAULT_SPEC_DIR
     end
 
+    # @return [Array<String>] relative paths to *_spec.rb files
     def discover
       if umbrella?
         discover_umbrella
@@ -72,6 +76,7 @@ module RedDot
       files.group_by { |f| File.dirname(f) }.transform_values(&:sort)
     end
 
+    # @return [Hash] { run_cwd:, rspec_path: } for running the given display path
     def run_context_for(display_path)
       if umbrella?
         run_context_umbrella(display_path)

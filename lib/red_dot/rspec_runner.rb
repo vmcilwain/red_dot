@@ -3,6 +3,7 @@
 require 'tempfile'
 
 module RedDot
+  # Spawns RSpec and returns pid, stdout pipe, and JSON path. Uses bundle exec if Gemfile present.
   class RspecRunner
     def self.spawn(working_dir:, paths:, tags: [], format: 'progress', out_path: nil,
                    example_filter: nil, fail_fast: false, seed: nil)
@@ -35,6 +36,7 @@ module RedDot
       { pid: pid, stdout_io: stdout_r, json_path: json_path }
     end
 
+    # @return [Array<String>] argv for rspec (paths, --format json --out path, tags, etc.)
     def self.build_argv(paths:, json_path:, format: 'progress', out_path: nil, tags: [],
                         example_filter: nil, fail_fast: false, seed: nil)
       argv = paths.dup
@@ -53,6 +55,7 @@ module RedDot
       File.file?(gemfile) ? %w[bundle exec rspec] : ['rspec']
     end
 
+    # Runs rspec --dry-run --format json --out path; returns json path.
     def self.run_dry_run(working_dir:, paths:)
       json_file = Tempfile.new(['red_dot_list', '.json'])
       json_path = json_file.path
