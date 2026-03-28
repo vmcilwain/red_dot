@@ -30,6 +30,7 @@ RSpec.describe RedDot::Config do
         tags_str: '',
         format: 'progress',
         fail_fast: false,
+        full_output: false,
         editor: 'cursor'
       )
     end
@@ -50,6 +51,12 @@ RSpec.describe RedDot::Config do
         expect(result[:fail_fast]).to be true
         expect(result[:tags]).to eq(%w[foo bar])
         expect(result[:editor]).to eq('vscode')
+      end
+
+      it 'merges full_output' do
+        File.write(project_config_path, "full_output: true\n")
+        result = described_class.load(working_dir: working_dir)
+        expect(result[:full_output]).to be true
       end
     end
 

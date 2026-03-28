@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 module RedDot
-  # Parses argv into working_dir and option_overrides (format, tags, out_path, example_filter, line_number, fail_fast).
+  # Parses argv into working_dir and option_overrides (format, tags, out_path, example_filter, line_number,
+  # fail_fast, full_output).
   class Cli
     # @return [Hash] { working_dir:, option_overrides: }
     def self.parse(argv = ARGV)
@@ -29,6 +30,9 @@ module RedDot
           i += 2
         when '--fail-fast'
           overrides[:fail_fast] = true
+          i += 1
+        when '--full-output'
+          overrides[:full_output] = true
           i += 1
         when /^[^-]/
           dir = arg

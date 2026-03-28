@@ -75,7 +75,7 @@ module RedDot
       @options_cursor = 0
       @options_editing = nil
       @options_edit_buffer = ''
-      @options_field_keys = %i[line_number seed format fail_fast tags_str out_path example_filter editor]
+      @options_field_keys = %i[line_number seed format fail_fast full_output tags_str out_path example_filter editor]
       @results_cursor = 0
       @file_list_scroll_offset = 0
       @results_scroll_offset = 0
@@ -111,6 +111,7 @@ module RedDot
       @options[:example_filter] = o[:example_filter].to_s if o.key?(:example_filter)
       @options[:line_number] = o[:line_number].to_s if o.key?(:line_number)
       @options[:fail_fast] = o[:fail_fast] ? true : false if o.key?(:fail_fast)
+      @options[:full_output] = o[:full_output] ? true : false if o.key?(:full_output)
       @options[:seed] = o[:seed].to_s if o.key?(:seed)
       return unless o.key?(:editor) && RedDot::Config::VALID_EDITORS.include?(o[:editor].to_s.strip.downcase)
 
@@ -152,32 +153,7 @@ module RedDot
             @run_stdout&.close
             @run_stdout = nil
             @run_pid = nil
-            if @run_queue&.any?
-              next_group = @run_queue.shift
-              opts = { working_dir: next_group[:run_cwd], paths: next_group[:rspec_paths],
-                       tags: @options[:tags].empty? ? parse_tags(@options[:tags_str]) : @options[:tags],
-                       format: @options[:format], out_path: @options[:out_path].to_s.strip,
-                       example_filter: @options[:example_filter].to_s.strip, fail_fast: @options[:fail_fast],
-                       seed: @options[:seed].to_s.strip }
-              opts[:out_path] = nil if opts[:out_path].to_s.empty?
-              opts[:example_filter] = nil if opts[:example_filter].to_s.empty?
-              opts[:seed] = nil if opts[:seed].to_s.empty?
-              data = RspecRunner.spawn(**opts)
-              @run_pid = data[:pid]
-              @run_stdout = data[:stdout_io]
-              @run_json_path = data[:json_path]
-              @last_run_component_root = next_group[:component_root]
-              [self, schedule_tick]
-            else
-              @run_queue = nil
-              @last_result = RspecResult.from_json_path(@run_json_path)
-              raw_failures = @last_result&.failure_locations || []
-              @run_failed_paths = normalize_failure_paths(raw_failures)
-              @screen = :results
-              @results_cursor = 0
-              @results_scroll_offset = 0
-              [self, nil]
-            end
+            after_run_process_exits
           else
             [self, schedule_tick]
           end
@@ -247,6 +223,25 @@ module RedDot
       Bubbletea.tick(0.05) { TickMessage.new }
     end
 
+    # @param digit [Integer] 1, 2, or 3 — same semantics as pressing that key for panel focus.
+    def apply_panel_focus_digit(digit)
+      case digit
+      when 1
+        @options_focus = true
+        @screen = :file_list
+      when 2
+        @options_focus = false
+        @screen = :file_list
+      when 3
+        @options_focus = false
+        if @run_pid
+          @screen = :running
+        elsif @last_result
+          @screen = :results
+        end
+      end
+    end
+
     def handle_key(message)
       return handle_input_prompt_key(message) if @input_prompt
 
@@ -256,25 +251,12 @@ module RedDot
         @screen = :file_list
         return [self, nil]
       end
-      return handle_find_key(message) if @find_buffer
+      return handle_find_key(message) if @find_buffer && @screen == :file_list
 
       unless @options_editing
         case key
-        when '1'
-          @options_focus = true
-          @screen = :file_list
-          return [self, nil]
-        when '2'
-          @options_focus = false
-          @screen = :file_list
-          return [self, nil]
-        when '3'
-          @options_focus = false
-          if @run_pid
-            @screen = :running
-          elsif @last_result
-            @screen = :results
-          end
+        when '1', '2', '3'
+          apply_panel_focus_digit(key.to_i)
           return [self, nil]
         end
       end
@@ -408,7 +390,7 @@ module RedDot
         list = display_rows
         @cursor = [@cursor, list.size - 1].min
         [self, nil]
-      when ' ', 'space'
+      when 'ctrl+t'
         @selected[row.path] = !@selected[row.path] if row&.file_row?
         [self, nil]
       when 'enter'
@@ -502,6 +484,10 @@ module RedDot
         @cursor = [list.size - 1, 0].max
         @file_list_scroll_offset = max_scroll
         return [self, nil]
+      when 'ctrl+t'
+        row = list[@cursor]
+        @selected[row.path] = !@selected[row.path] if row&.file_row?
+        return [self, nil]
       end
       c = nil
       if message.respond_to?(:char) && (ch = message.char) && ch.is_a?(String) && !ch.empty?
@@ -578,9 +564,12 @@ module RedDot
         [self, nil]
       when 'enter'
         field = @options_field_keys[@options_cursor]
-        if field == :fail_fast
+        case field
+        when :fail_fast
           @options[:fail_fast] = !@options[:fail_fast]
-        elsif field == :editor
+        when :full_output
+          @options[:full_output] = !@options[:full_output]
+        when :editor
           idx = RedDot::Config::VALID_EDITORS.index(@options[:editor].to_s) || 0
           @options[:editor] = RedDot::Config::VALID_EDITORS[(idx + 1) % RedDot::Config::VALID_EDITORS.size]
         else
@@ -628,36 +617,50 @@ module RedDot
       when 'q', 'ctrl+c'
         kill_run
         @screen = :file_list
-        [self, nil]
       when '2'
         @screen = :file_list
-        [self, nil]
       when 'up', 'k'
         @run_output_scroll = [@run_output_scroll - 1, 0].max
-        [self, nil]
       when 'down', 'j'
         @run_output_scroll = [@run_output_scroll + 1, max_scroll].min
-        [self, nil]
       when 'pgup', 'ctrl+u'
         @run_output_scroll = [@run_output_scroll - run_visible, 0].max
-        [self, nil]
       when 'pgdown', 'ctrl+d'
         @run_output_scroll = [@run_output_scroll + run_visible, max_scroll].min
-        [self, nil]
       when 'home', 'g'
         @run_output_scroll = 0
-        [self, nil]
       when 'end', 'G'
         @run_output_scroll = max_scroll
-        [self, nil]
-      else
-        [self, nil]
       end
+      [self, nil]
     end
 
     def handle_results_key(key)
       failed = @last_result&.failed_examples || []
       content_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
+      if @options[:full_output]
+        max_scroll = [@results_total_lines - content_h, 0].max
+        case key
+        when 'up', 'k'
+          @results_scroll_offset = [@results_scroll_offset - 1, 0].max
+          return [self, nil]
+        when 'down', 'j'
+          @results_scroll_offset = [@results_scroll_offset + 1, max_scroll].min
+          return [self, nil]
+        when 'pgup', 'ctrl+u'
+          @results_scroll_offset = [@results_scroll_offset - content_h, 0].max
+          return [self, nil]
+        when 'pgdown', 'ctrl+d'
+          @results_scroll_offset = [@results_scroll_offset + content_h, max_scroll].min
+          return [self, nil]
+        when 'home', 'g'
+          @results_scroll_offset = 0
+          return [self, nil]
+        when 'end', 'G'
+          @results_scroll_offset = max_scroll
+          return [self, nil]
+        end
+      end
       case key
       when 'q', 'ctrl+c'
         [self, Bubbletea.quit]
@@ -719,10 +722,10 @@ module RedDot
       return paths if query.to_s.strip.empty?
 
       q = query.to_s.downcase
-      paths.select { |path| fuzzy_match_string(path, q) }
+      paths.select { |path| fuzzy_match_string?(path, q) }
     end
 
-    def fuzzy_match_string(str, query)
+    def fuzzy_match_string?(str, query)
       return true if query.to_s.strip.empty?
 
       q = query.to_s.downcase
@@ -778,9 +781,9 @@ module RedDot
 
       rows = []
       flat_spec_list.each do |path|
-        file_matches = fuzzy_match_string(path, q)
+        file_matches = fuzzy_match_string?(path, q)
         examples = cached_examples_for(path)
-        example_matches = examples.select { |ex| fuzzy_match_string(ex.full_description.to_s, q) }
+        example_matches = examples.select { |ex| fuzzy_match_string?(ex.full_description.to_s, q) }
         show_file = file_matches || example_matches.any?
         next unless show_file
 
@@ -965,6 +968,37 @@ module RedDot
       # pipe closed or broken
     end
 
+    def after_run_process_exits
+      return spawn_next_queued_rspec if @run_queue&.any?
+
+      @run_queue = nil
+      @last_result = RspecResult.from_json_path(@run_json_path)
+      raw_failures = @last_result&.failure_locations || []
+      @run_failed_paths = normalize_failure_paths(raw_failures)
+      @screen = :results
+      @results_cursor = 0
+      @results_scroll_offset = 0
+      [self, nil]
+    end
+
+    def spawn_next_queued_rspec
+      next_group = @run_queue.shift
+      opts = { working_dir: next_group[:run_cwd], paths: next_group[:rspec_paths],
+               tags: @options[:tags].empty? ? parse_tags(@options[:tags_str]) : @options[:tags],
+               format: @options[:format], out_path: @options[:out_path].to_s.strip,
+               example_filter: @options[:example_filter].to_s.strip, fail_fast: @options[:fail_fast],
+               seed: @options[:seed].to_s.strip }
+      opts[:out_path] = nil if opts[:out_path].to_s.empty?
+      opts[:example_filter] = nil if opts[:example_filter].to_s.empty?
+      opts[:seed] = nil if opts[:seed].to_s.empty?
+      data = RspecRunner.spawn(**opts)
+      @run_pid = data[:pid]
+      @run_stdout = data[:stdout_io]
+      @run_json_path = data[:json_path]
+      @last_run_component_root = next_group[:component_root]
+      [self, schedule_tick]
+    end
+
     def kill_run
       return unless @run_pid
 
@@ -1063,7 +1097,12 @@ module RedDot
       header_lines << ''
       list = display_rows
       if list.empty?
-        header_lines << (@find_buffer.to_s.strip.empty? ? @muted_style.render("  #{@discovery.empty_state_message}") : @muted_style.render('  No matches'))
+        empty_line = if @find_buffer.to_s.strip.empty?
+                       @muted_style.render("  #{@discovery.empty_state_message}")
+                     else
+                       @muted_style.render('  No matches')
+                     end
+        header_lines << empty_line
         return header_lines
       end
       @cursor = [@cursor, list.size - 1].min
@@ -1137,7 +1176,7 @@ module RedDot
       [
         (focused_panel == 3 ? @active_title_style.render(title) : @inactive_title_style.render(title)),
         '',
-        @muted_style.render('Select files (Space), then Enter or s to run.'),
+        @muted_style.render('Select files (Ctrl+T), then Enter or s to run.'),
         @muted_style.render('a = run all  f = run failed (after failures)'),
         '',
         (@last_result ? "  Last: #{@last_result.summary_line}" : '')
@@ -1147,7 +1186,8 @@ module RedDot
     def build_options_bar_lines
       labels = {
         tags_str: 'Tags', format: 'Format', out_path: 'Output',
-        example_filter: 'Example', line_number: 'Line', fail_fast: 'Fail-fast', seed: 'Seed', editor: 'Editor'
+        example_filter: 'Example', line_number: 'Line', fail_fast: 'Fail-fast', full_output: 'Full output',
+        seed: 'Seed', editor: 'Editor'
       }
       max_val = 14
       segments = @options_field_keys.each_with_index.map do |key, i|
@@ -1155,6 +1195,8 @@ module RedDot
           val = "#{@options_edit_buffer}_"
         elsif key == :fail_fast
           val = @options[:fail_fast].to_s
+        elsif key == :full_output
+          val = @options[:full_output].to_s
         elsif key == :editor
           val = @options[:editor].to_s
         elsif %i[line_number seed].include?(key)
@@ -1190,7 +1232,35 @@ module RedDot
       ]
     end
 
+    def build_results_lines_full_output(content_h)
+      title = ' 3  Results '
+      lines = [(focused_panel == 3 ? @active_title_style.render(title) : @inactive_title_style.render(title)), '']
+      @results_failed_line_indices = []
+      lines << if @last_result
+                 "  #{@last_result.summary_line}"
+               else
+                 @muted_style.render('  No result data.')
+               end
+      lines << ''
+      if @run_output.any?
+        lines << @muted_style.render('  Full output:')
+        @run_output.each { |out_line| lines << "  #{out_line}" }
+      else
+        lines << @muted_style.render('  (No captured stdout from this run.)')
+      end
+      lines << ''
+      lines << @help_style.render(
+        '  j/k: scroll  PgUp/PgDn  g/G: top/bottom  e: run  O: open  b: back  r: rerun  f: failed  q: quit'
+      )
+      @results_total_lines = lines.size
+      max_scroll = [@results_total_lines - content_h, 0].max
+      @results_scroll_offset = [[@results_scroll_offset, max_scroll].min, 0].max
+      lines[@results_scroll_offset, content_h] || []
+    end
+
     def build_results_lines(content_h)
+      return build_results_lines_full_output(content_h) if @options[:full_output]
+
       title = ' 3  Results '
       lines = [(focused_panel == 3 ? @active_title_style.render(title) : @inactive_title_style.render(title)), '']
       @results_failed_line_indices = []
@@ -1257,7 +1327,9 @@ module RedDot
         lines << @muted_style.render('  No result data.')
       end
       lines << ''
-      lines << @help_style.render('  j/k: move  PgUp/PgDn: scroll  g/G: top/bottom  e: run  O: open  b: back  r: rerun  f: failed  q: quit')
+      results_help = '  j/k: move  PgUp/PgDn: scroll  g/G: top/bottom  e: run  O: open  b: back  ' \
+                     'r: rerun  f: failed  q: quit'
+      lines << @help_style.render(results_help)
       @results_total_lines = lines.size
       max_scroll = [@results_total_lines - content_h, 0].max
       @results_scroll_offset = [[@results_scroll_offset, max_scroll].min, 0].max
@@ -1280,18 +1352,26 @@ module RedDot
 
     def status_line
       return ' Enter line number, Enter: run  Esc: cancel ' if @input_prompt
-      return ' ↑/↓: move  PgUp/PgDn: scroll  Home/End: top/bottom  Enter: run  Esc or Ctrl+B: exit find ' if @find_buffer
+
+      if @find_buffer
+        return ' ↑/↓: move  PgUp/PgDn: scroll  Home/End: top/bottom  Ctrl+T: toggle  Enter: run  ' \
+               'Esc or Ctrl+B: exit find '
+      end
 
       case @screen
       when :file_list
         if @options_focus
           ' 1/2/3: panels  j/k: move  Enter: edit  R: refresh  b: back  q: quit '
         else
-          ' 1/2/3: panels  /: find  I: index  j/k: move  PgUp/PgDn  g/G: top/bottom  ]/[: expand  a: all  s: selected  e: run  O: open  f: failed  o: options  R: refresh  q: quit '
+          ' 1/2/3: panels  /: find  I: index  j/k: move  PgUp/PgDn  g/G: top/bottom  ]/[: expand  ' \
+            'Ctrl+T: select  a: all  s: selected  e: run  O: open  f: failed  o: options  R: refresh  q: quit '
         end
       when :indexing then '  Indexing specs for search...  q / Esc: cancel '
       when :running then ' 1/2/3: panels  j/k PgUp/PgDn g/G: scroll output  2: file list  q: kill run '
-      when :results then ' 1/2/3: panels  j/k: move  PgUp/PgDn: scroll  g/G: top/bottom  e: run  O: open  b: back  r: rerun  f: failed  q: quit '
+      when :results
+        move_or_scroll = @options[:full_output] ? 'scroll' : 'move'
+        " 1/2/3: panels  j/k: #{move_or_scroll}  PgUp/PgDn: scroll  g/G: top/bottom  e: run  O: open  b: back  " \
+          'r: rerun  f: failed  q: quit '
       else ' 1/2/3: panels  q: quit '
       end
     end

@@ -14,7 +14,7 @@ module RedDot
 
   # Runs the TUI. Requires TTY. Exits with 1 if not a TTY.
   # @param working_dir [String] directory containing specs
-  # @param option_overrides [Hash] e.g. :tags, :format, :out_path, :fail_fast, :seed, :editor
+  # @param option_overrides [Hash] e.g. :tags, :format, :out_path, :fail_fast, :full_output, :seed, :editor
   def self.run(working_dir: Dir.pwd, option_overrides: {})
     unless $stdout.tty?
       warn 'Error: red_dot (rdot) requires a TTY. Run from a terminal.'
