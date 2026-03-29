@@ -3,9 +3,12 @@
 require 'bubbletea'
 require 'lipgloss'
 
+require_relative 'config'
 require_relative 'display_row'
+require_relative 'editor_launcher'
 require_relative 'messages'
 require_relative 'fuzzy'
+require_relative 'result_paths'
 require_relative 'tui_text'
 
 module RedDot
@@ -366,7 +369,14 @@ module RedDot
         end
         [self, nil]
       when 'O'
-        open_in_editor(row&.path, row&.example_row? ? row.line_number : nil) if row
+        if row
+          EditorLauncher.open(
+            path: row.path,
+            line: row.example_row? ? row.line_number : nil,
+            working_dir: @working_dir,
+            editor: @options[:editor]
+          )
+        end
         [self, nil]
       when 'o'
         @options_focus = true
@@ -546,7 +556,7 @@ module RedDot
         field = @options_editing
         @options_editing = nil
         @options[field] = @options_edit_buffer.dup
-        @options[:tags] = parse_tags(@options[:tags_str]) if field == :tags_str
+        @options[:tags] = Config.parse_tags(@options[:tags_str]) if field == :tags_str
         [self, nil]
       end
       if message.respond_to?(:esc?) && message.esc?
@@ -647,15 +657,15 @@ module RedDot
       when 'e'
         ex = failed[@results_cursor]
         if ex&.line_number
-          display_path = display_path_for_result_file(ex.file_path)
+          display_path = ResultPaths.display_path_for_result_file(ex.file_path, @last_run_component_root)
           return run_specs(["#{display_path}:#{ex.line_number}"])
         end
         [self, nil]
       when 'O'
         ex = failed[@results_cursor]
         if ex
-          display_path = display_path_for_result_file(ex.file_path)
-          open_in_editor(display_path, ex.line_number)
+          display_path = ResultPaths.display_path_for_result_file(ex.file_path, @last_run_component_root)
+          EditorLauncher.open(path: display_path, line: ex.line_number, working_dir: @working_dir, editor: @options[:editor])
         end
         [self, nil]
       when 'r'
@@ -822,7 +832,7 @@ module RedDot
     def run_specs(paths)
       paths = apply_line_number_to_paths(paths)
       @last_run_paths = paths
-      tags = @options[:tags].empty? ? parse_tags(@options[:tags_str]) : @options[:tags]
+      tags = @options[:tags].empty? ? Config.parse_tags(@options[:tags_str]) : @options[:tags]
       format = @options[:format]
       out_path = @options[:out_path].to_s.strip
       out_path = nil if out_path.empty?
@@ -875,38 +885,6 @@ module RedDot
       Pathname.new(run_cwd).relative_path_from(Pathname.new(@working_dir)).to_s
     end
 
-    def normalize_failure_paths(locations)
-      return locations if locations.nil? || locations.empty?
-      return locations unless @last_run_component_root
-
-      locations.map do |loc|
-        if loc.to_s.include?(':')
-          file, line = loc.to_s.split(':', 2)
-          display_file = @last_run_component_root.empty? ? file : "#{@last_run_component_root}/#{file}"
-          "#{display_file}:#{line}"
-        else
-          @last_run_component_root.empty? ? loc : "#{@last_run_component_root}/#{loc}"
-        end
-      end
-    end
-
-    def display_path_for_result_file(file_path)
-      return file_path.to_s if file_path.to_s.strip.empty?
-      return file_path.to_s unless @last_run_component_root
-
-      if @last_run_component_root.empty?
-        file_path.to_s
-      else
-        "#{@last_run_component_root}/#{file_path}"
-      end
-    end
-
-    def parse_tags(str)
-      return [] if str.to_s.strip.empty?
-
-      str.split(/[\s,]+/).map(&:strip).reject(&:empty?)
-    end
-
     def read_run_output
       return unless @run_stdout
 
@@ -956,7 +934,7 @@ module RedDot
       @run_queue = nil
       @last_result = RspecResult.from_json_path(@run_json_path)
       raw_failures = @last_result&.failure_locations || []
-      @run_failed_paths = normalize_failure_paths(raw_failures)
+      @run_failed_paths = ResultPaths.normalize_failure_locations(raw_failures, @last_run_component_root)
       @screen = :results
       @results_cursor = 0
       @results_scroll_offset = 0
@@ -966,7 +944,7 @@ module RedDot
     def spawn_next_queued_rspec
       next_group = @run_queue.shift
       opts = { working_dir: next_group[:run_cwd], paths: next_group[:rspec_paths],
-               tags: @options[:tags].empty? ? parse_tags(@options[:tags_str]) : @options[:tags],
+               tags: @options[:tags].empty? ? Config.parse_tags(@options[:tags_str]) : @options[:tags],
                format: @options[:format], out_path: @options[:out_path].to_s.strip,
                example_filter: @options[:example_filter].to_s.strip, fail_fast: @options[:fail_fast],
                seed: @options[:seed].to_s.strip }
@@ -1001,30 +979,6 @@ module RedDot
       @find_buffer = nil
       @cursor = 0
       [self, nil]
-    end
-
-    def open_in_editor(path, line = nil)
-      return if path.to_s.strip.empty?
-
-      full_path = File.expand_path(path, @working_dir)
-      return unless File.exist?(full_path)
-
-      editor = (@options[:editor] || 'cursor').to_s.downcase
-      editor = 'cursor' unless RedDot::Config::VALID_EDITORS.include?(editor)
-
-      args = case editor
-             when 'vscode'
-               line ? ['code', '-g', "#{full_path}:#{line}"] : ['code', full_path]
-             when 'cursor'
-               line ? ['cursor', '-g', "#{full_path}:#{line}"] : ['cursor', full_path]
-             when 'textmate'
-               line ? ['mate', '-l', line.to_s, full_path] : ['mate', full_path]
-             else
-               ['cursor', full_path]
-             end
-
-      pid = Process.spawn(*args, out: File::NULL, err: File::NULL)
-      Process.detach(pid)
     end
 
     def index_empty?
@@ -1266,7 +1220,7 @@ module RedDot
           r.failed_examples.each_with_index do |ex, i|
             @results_failed_line_indices << lines.size
             prefix = i == @results_cursor ? '> ' : '  '
-            loc_path = display_path_for_result_file(ex.file_path)
+            loc_path = ResultPaths.display_path_for_result_file(ex.file_path, @last_run_component_root)
             lines << @fail_style.render("#{prefix}#{loc_path}:#{ex.line_number} #{ex.description}")
             lines << @muted_style.render("    #{ex.exception_message&.lines&.first&.strip}") if ex.exception_message
           end

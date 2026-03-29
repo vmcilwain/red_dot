@@ -16,6 +16,16 @@ RSpec.describe RedDot::Config do
     end
   end
 
+  describe '.parse_tags' do
+    it 'splits on comma and whitespace' do
+      expect(described_class.parse_tags('a, b  c')).to eq(%w[a b c])
+    end
+
+    it 'returns [] for blank string' do
+      expect(described_class.parse_tags('  ')).to eq([])
+    end
+  end
+
   describe '.project_config_path' do
     it 'returns .red_dot.yml in expanded working_dir' do
       expect(described_class.project_config_path(working_dir)).to eq(File.expand_path(project_config_path))

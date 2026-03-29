@@ -92,11 +92,19 @@ module RedDot
       opts
     end
 
+    # @param str [String] comma/whitespace-separated tag list (from UI or CLI)
+    # @return [Array<String>]
+    def self.parse_tags(str)
+      return [] if str.to_s.strip.empty?
+
+      str.split(/[\s,]+/).map(&:strip).reject(&:empty?)
+    end
+
     def self.array_or_parse(existing, tags_val, tags_str_val)
       if tags_val.is_a?(Array)
         tags_val.map(&:to_s).reject(&:empty?)
       elsif tags_str_val.to_s.strip != ''
-        tags_str_val.to_s.split(/[\s,]+/).map(&:strip).reject(&:empty?)
+        parse_tags(tags_str_val)
       else
         existing
       end

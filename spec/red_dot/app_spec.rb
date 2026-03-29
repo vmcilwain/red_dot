@@ -199,16 +199,6 @@ RSpec.describe RedDot::App do
   end
 
   describe 'private helpers (via send for unit coverage)' do
-    describe '#parse_tags' do
-      it 'splits on comma and whitespace' do
-        expect(app.send(:parse_tags, 'a, b  c')).to eq(%w[a b c])
-      end
-
-      it 'returns [] for blank string' do
-        expect(app.send(:parse_tags, '  ')).to eq([])
-      end
-    end
-
     describe '#visible_length' do
       it 'strips ANSI codes' do
         expect(app.send(:visible_length, "\e[31mhi\e[0m")).to eq(2)
@@ -237,30 +227,6 @@ RSpec.describe RedDot::App do
 
       it 'returns empty string for non-numeric' do
         expect(app.send(:format_run_time, nil)).to eq('')
-      end
-    end
-
-    describe '#normalize_failure_paths' do
-      it 'returns locations when no component_root' do
-        app.send(:instance_variable_set, :@last_run_component_root, nil)
-        expect(app.send(:normalize_failure_paths, ['spec/x_spec.rb:1'])).to eq(['spec/x_spec.rb:1'])
-      end
-
-      it 'prepends component_root when set' do
-        app.send(:instance_variable_set, :@last_run_component_root, 'components/a')
-        expect(app.send(:normalize_failure_paths, ['spec/x_spec.rb:1'])).to eq(['components/a/spec/x_spec.rb:1'])
-      end
-    end
-
-    describe '#display_path_for_result_file' do
-      it 'returns path when no component_root' do
-        app.send(:instance_variable_set, :@last_run_component_root, nil)
-        expect(app.send(:display_path_for_result_file, 'spec/foo_spec.rb')).to eq('spec/foo_spec.rb')
-      end
-
-      it 'prepends component_root when set' do
-        app.send(:instance_variable_set, :@last_run_component_root, 'components/a')
-        expect(app.send(:display_path_for_result_file, 'spec/foo_spec.rb')).to eq('components/a/spec/foo_spec.rb')
       end
     end
 
