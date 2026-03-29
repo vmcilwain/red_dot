@@ -106,7 +106,7 @@ Example `~/.config/red_dot/config.yml`:
 format: documentation
 tags_str: "~slow"
 fail_fast: false
-editor: cursor # vscode, cursor, or textmate — path executable used when opening file (O)
+editor: cursor # vscode, cursor, or textmate — used when opening file (O)
 ```
 
 Example `.red_dot.yml` in project root:
