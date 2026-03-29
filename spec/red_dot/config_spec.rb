@@ -24,6 +24,10 @@ RSpec.describe RedDot::Config do
     it 'returns [] for blank string' do
       expect(described_class.parse_tags('  ')).to eq([])
     end
+
+    it 'coerces non-String with #to_s before splitting' do
+      expect(described_class.parse_tags(123)).to eq(%w[123])
+    end
   end
 
   describe '.project_config_path' do
@@ -116,6 +120,18 @@ RSpec.describe RedDot::Config do
       described_class.merge_overrides!(opts, tags: %w[a b])
       expect(opts[:tags]).to eq(%w[a b])
       expect(opts[:tags_str]).to eq('a, b')
+    end
+
+    it 'parses tags from tags_str when tags array is not given' do
+      described_class.merge_overrides!(opts, tags_str: 'foo bar')
+      expect(opts[:tags_str]).to eq('foo bar')
+      expect(opts[:tags]).to eq(%w[foo bar])
+    end
+
+    it 'keeps tags from array when both tags and tags_str are given' do
+      described_class.merge_overrides!(opts, tags: %w[a b], tags_str: 'c d')
+      expect(opts[:tags]).to eq(%w[a b])
+      expect(opts[:tags_str]).to eq('c d')
     end
 
     it 'sets editor only when valid' do

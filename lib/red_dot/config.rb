@@ -77,7 +77,10 @@ module RedDot
         opts[:tags] = o[:tags].map(&:to_s).reject(&:empty?)
         opts[:tags_str] = opts[:tags].join(', ')
       end
-      opts[:tags_str] = o[:tags_str].to_s if o.key?(:tags_str)
+      if o.key?(:tags_str)
+        opts[:tags_str] = o[:tags_str].to_s
+        opts[:tags] = parse_tags(opts[:tags_str]) unless o.key?(:tags) && o[:tags].is_a?(Array)
+      end
       opts[:format] = o[:format].to_s.strip if o.key?(:format) && !o[:format].to_s.strip.empty?
       opts[:out_path] = o[:out_path].to_s if o.key?(:out_path)
       opts[:example_filter] = o[:example_filter].to_s if o.key?(:example_filter)
@@ -95,9 +98,10 @@ module RedDot
     # @param str [String] comma/whitespace-separated tag list (from UI or CLI)
     # @return [Array<String>]
     def self.parse_tags(str)
-      return [] if str.to_s.strip.empty?
+      s = str.to_s
+      return [] if s.strip.empty?
 
-      str.split(/[\s,]+/).map(&:strip).reject(&:empty?)
+      s.split(/[\s,]+/).map(&:strip).reject(&:empty?)
     end
 
     def self.array_or_parse(existing, tags_val, tags_str_val)

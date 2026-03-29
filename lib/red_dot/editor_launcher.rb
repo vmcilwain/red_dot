@@ -27,6 +27,8 @@ module RedDot
 
       pid = Process.spawn(*args, out: File::NULL, err: File::NULL)
       Process.detach(pid)
+    rescue SystemCallError => e
+      warn "red_dot: could not open editor (#{e.class}): #{e.message}"
     end
   end
 end

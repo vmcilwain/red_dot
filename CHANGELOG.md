@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased](https://github.com/vmcilwain/red_dot/compare/v0.2.0...HEAD)
 
+### Added
+
+- **Screenshot** in the repository for documentation.
+- **`Config.merge_overrides!`**: single entry point for merging CLI- and YAML-style option hashes into options (used by `merge_file` and `App#apply_option_overrides`).
+- **Modular TUI code**: `DisplayRow`, Bubbletea message classes (`RspecStartedMessage`, `TickMessage`, etc.), `FuzzySearch`, and `TuiText` extracted from `App` for clearer structure and tests.
+- **`Config.parse_tags`**: shared parsing for comma/whitespace-separated tags (used by YAML loading and the TUI).
+- **`ResultPaths`**: helpers for normalizing failure locations and display paths when runs use a component (umbrella) working directory.
+- **`EditorLauncher`**: opens paths in the configured editor (`vscode`, `cursor`, or `textmate`).
+
+### Changed
+
+- **Selection (Ctrl+T)**: toggles selection on **example** rows (path:line) as well as whole files; selecting a file clears line-level keys for that file; selecting an example clears whole-file selection for that path; run targets dedupe when a file and its examples are both selected.
+- **README**: documents that the **editor** option must be one of the built-in identifiers (not an arbitrary executable path); panel/keybinding text updated for example-level selection.
+- **Internals**: `App` delegates option overrides to `Config`; tag list parsing for YAML `tags_str` goes through `parse_tags`.
+
+### Fixed
+
+- **`merge_overrides!`**: when only `tags_str` is supplied (no `tags` array), the `tags` array is updated from the parsed string so options stay consistent.
+- **`parse_tags`**: coerces input with `to_s` before splitting so non-string values do not raise.
+- **`EditorLauncher`**: a failed `Process.spawn` (e.g. missing editor binary) logs a warning instead of crashing the TUI.
+
 ## [0.2.0](https://github.com/vmcilwain/red_dot/compare/v0.1.0...v0.2.0) - 2026-03-28
 
 ### Added
