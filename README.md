@@ -1,3 +1,5 @@
+![Screenshot](screenshot.png)
+
 # Red Dot
 
 A terminal UI for running RSpec tests (Inspired by VScode Test Explorer). Start it from your project directory, leave it open, and run any combination of specs whenever you want.
@@ -63,7 +65,6 @@ rdot --tag slow --fail-fast /path/to/project/root
 rdot -f progress -t focus -o /tmp/out.txt
 ```
 
-
 | Option          | Short | Description                                                                                                 |
 | --------------- | ----- | ----------------------------------------------------------------------------------------------------------- |
 | `--format`      | `-f`  | RSpec formatter (e.g. progress, documentation)                                                              |
@@ -73,7 +74,6 @@ rdot -f progress -t focus -o /tmp/out.txt
 | `--line`        | `-l`  | Line number (run single example at path:line when running one file)                                         |
 | `--fail-fast`   | —     | Stop on first failure                                                                                       |
 | `--full-output` | —     | After a run, show captured RSpec stdout in the results panel (same as toggling **Full output** in options). |
-
 
 ### Configuration
 
@@ -86,21 +86,19 @@ Options are merged in this order (later overrides earlier):
 
 All of these can be overridden via config YAML (user or project). In the TUI, press `o` to focus the options bar and edit any field (Enter to edit or toggle).
 
-
 | Option      | Default    | Config key           | Notes                                                                                                                                              |
 | ----------- | ---------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tags        | *(empty)*  | `tags` or `tags_str` | RSpec tag filter. Use `tags:` (array) or `tags_str:` (string, e.g. `"~slow, focus"`).                                                              |
+| Tags        | _(empty)_  | `tags` or `tags_str` | RSpec tag filter. Use `tags:` (array) or `tags_str:` (string, e.g. `"~slow, focus"`).                                                              |
 | Format      | `progress` | `format`             | RSpec formatter: e.g. `progress`, `documentation`.                                                                                                 |
-| Output      | *(empty)*  | `output`             | File path for RSpec output. Also accepts legacy key `out_path`.                                                                                    |
-| Example     | *(empty)*  | `example_filter`     | Example filter (e.g. regex) passed to RSpec.                                                                                                       |
-| Line        | *(empty)*  | `line_number`        | Line number for single-file runs (path:line).                                                                                                      |
+| Output      | _(empty)_  | `output`             | File path for RSpec output. Also accepts legacy key `out_path`.                                                                                    |
+| Example     | _(empty)_  | `example_filter`     | Example filter (e.g. regex) passed to RSpec.                                                                                                       |
+| Line        | _(empty)_  | `line_number`        | Line number for single-file runs (path:line).                                                                                                      |
 | Fail-fast   | `false`    | `fail_fast`          | Stop on first failure. Use `true` or `false`.                                                                                                      |
 | Full output | `false`    | `full_output`        | Results panel shows captured RSpec stdout (scrollable) instead of the structured summary. Toggle with Enter on **Full output** in the options bar. |
-| Seed        | *(empty)*  | `seed`               | RSpec random seed (e.g. `12345`) for reproducibility.                                                                                              |
+| Seed        | _(empty)_  | `seed`               | RSpec random seed (e.g. `12345`) for reproducibility.                                                                                              |
 | Editor      | `cursor`   | `editor`             | Editor for “open file” (O): `vscode`, `cursor`, or `textmate`.                                                                                     |
 
-
-| Components | *(auto)* | `components` | Umbrella only: list of component root paths (relative to project root). Overrides automatic discovery. Use `"."` or `""` for root, e.g. `[".", "components/auth", "apps/web"]`. |
+| Components | _(auto)_ | `components` | Umbrella only: list of component root paths (relative to project root). Overrides automatic discovery. Use `"."` or `""` for root, e.g. `[".", "components/auth", "apps/web"]`. |
 
 Example `~/.config/red_dot/config.yml`:
 
@@ -108,7 +106,7 @@ Example `~/.config/red_dot/config.yml`:
 format: documentation
 tags_str: "~slow"
 fail_fast: false
-editor: cursor   # vscode, cursor, or textmate — path executable used when opening file (O)
+editor: cursor # vscode, cursor, or textmate — path executable used when opening file (O)
 ```
 
 Example `.red_dot.yml` in project root:
@@ -118,7 +116,7 @@ format: progress
 tags:
   - focus
 output: /tmp/rspec.out
-editor: vscode   # optional: vscode, cursor, or textmate
+editor: vscode # optional: vscode, cursor, or textmate
 ```
 
 You can edit any option in the TUI: press `o` for Options, then ←/→ or j/k to move, Enter to edit a field, toggle fail-fast, or cycle editor (vscode → cursor → textmate).
@@ -132,13 +130,12 @@ The TUI uses a layout with numbered panels and a shared status bar:
 
 The TUI stays open until you press `q` or Ctrl+C. You can:
 
-- **File list**: Browse spec files; press **→** to expand a file (list its tests) and **←** to collapse. Press **I** to **index** all spec files (builds a searchable cache with a progress bar; run once so find can match test names without expanding). Select files or individual examples with **Ctrl+T** (works in find mode too; Space types a space in the find query), run with Enter or `s` (selected), `a` (all), `e` (run at line on a file, or run the focused example when on an example row), `f` (failed, after a run with failures). Use **/** to find; search matches file paths and test names for indexed (or expanded) files — put the cursor on a matched example and press Enter to run just that test. **Esc** or **Enter** exits find and collapses all files. Use **]** to expand all files and  to collapse all.
+- **File list**: Browse spec files; press **→** to expand a file (list its tests) and **←** to collapse. Press **I** to **index** all spec files (builds a searchable cache with a progress bar; run once so find can match test names without expanding). Select files or individual examples with **Ctrl+T** (works in find mode too; Space types a space in the find query), run with Enter or `s` (selected), `a` (all), `e` (run at line on a file, or run the focused example when on an example row), `f` (failed, after a run with failures). Use **/** to find; search matches file paths and test names for indexed (or expanded) files — put the cursor on a matched example and press Enter to run just that test. **Esc** or **Enter** exits find and collapses all files. Use **]** to expand all files and to collapse all.
 - **Options** (top bar): Always visible. Press `o` to focus; ←/→ or j/k to move, Enter to edit a field or toggle fail-fast; `b` or Esc to unfocus.
 - **Running**: See live RSpec output in the right panel. Press `**3`** to focus the output pane (if you switched to the file list). Use **j/k**, **PgUp/PgDn**, **g/G** to scroll the output; `**2`** to switch back to the file list. Press `**q`** to kill the run and return to the file list.
 - **Results**: In the right panel; j/k to move over failures, `e` to run that single example (path:line), `O` to open that file in your configured editor, `r` to rerun same scope, `f` to rerun only failed examples.
 
 ### Key bindings
-
 
 | Key     | Action                                                                                      |
 | ------- | ------------------------------------------------------------------------------------------- |
@@ -146,8 +143,6 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 | **2**   | Focus panel 2 (Spec files)                                                                  |
 | **3**   | Focus panel 3 (Output/Results when results exist; Running output when a run is in progress) |
 | q / Esc | Quit                                                                                        |
-
-
 
 | Key     | Action (file list — panel 2)                                                                 |
 | ------- | -------------------------------------------------------------------------------------------- |
@@ -169,8 +164,6 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 | R       | Refresh file list                                                                            |
 | q / Esc | Quit                                                                                         |
 
-
-
 | Key            | Action (options bar — panel 1)                                         |
 | -------------- | ---------------------------------------------------------------------- |
 | 2              | Focus panel 2 (Spec files)                                             |
@@ -179,8 +172,6 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 | b / Esc        | Unfocus options, back to file list                                     |
 | q              | Quit                                                                   |
 
-
-
 | Key         | Action (running output — panel 3, during a run)   |
 | ----------- | ------------------------------------------------- |
 | j / k       | Scroll output up/down                             |
@@ -188,8 +179,6 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 | g / G       | Jump to top/bottom of output                      |
 | 2           | Switch to file list (run continues in background) |
 | q           | Kill run and return to file list                  |
-
-
 
 | Key         | Action (results — panel 3)          |
 | ----------- | ----------------------------------- |
@@ -200,7 +189,6 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 | r           | Rerun same scope                    |
 | f           | Rerun failed only                   |
 | q           | Quit                                |
-
 
 ## Requirements
 
