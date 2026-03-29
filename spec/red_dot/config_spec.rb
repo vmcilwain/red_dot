@@ -94,6 +94,28 @@ RSpec.describe RedDot::Config do
     end
   end
 
+  describe '.merge_overrides!' do
+    let(:opts) { described_class::DEFAULT_OPTIONS.dup }
+
+    it 'returns opts unchanged when overrides are nil or empty' do
+      expect(described_class.merge_overrides!(opts, nil)).to eq(opts)
+      expect(described_class.merge_overrides!(opts, {})).to eq(opts)
+    end
+
+    it 'merges tags array and tags_str' do
+      described_class.merge_overrides!(opts, tags: %w[a b])
+      expect(opts[:tags]).to eq(%w[a b])
+      expect(opts[:tags_str]).to eq('a, b')
+    end
+
+    it 'sets editor only when valid' do
+      described_class.merge_overrides!(opts, editor: 'vscode')
+      expect(opts[:editor]).to eq('vscode')
+      described_class.merge_overrides!(opts, editor: 'invalid')
+      expect(opts[:editor]).to eq('vscode')
+    end
+  end
+
   describe '.array_or_parse' do
     it 'returns array when tags_val is Array' do
       expect(described_class.array_or_parse([], %w[a b], '')).to eq(%w[a b])

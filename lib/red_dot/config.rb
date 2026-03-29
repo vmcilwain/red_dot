@@ -53,16 +53,40 @@ module RedDot
       opts[:tags] = array_or_parse(opts[:tags], raw['tags'], raw['tags_str'])
       opts[:tags_str] = raw['tags_str'].to_s.strip if raw.key?('tags_str')
       opts[:tags_str] = (raw['tags'] || []).join(', ') if raw.key?('tags') && raw['tags'].is_a?(Array)
-      opts[:format] = raw['format'].to_s.strip if raw.key?('format') && !raw['format'].to_s.strip.empty?
-      opts[:out_path] = raw['output'].to_s if raw.key?('output')
-      opts[:out_path] = raw['out_path'].to_s if raw.key?('out_path') && !raw.key?('output')
-      opts[:example_filter] = raw['example_filter'].to_s if raw.key?('example_filter')
-      opts[:line_number] = raw['line_number'].to_s if raw.key?('line_number')
-      opts[:fail_fast] = raw['fail_fast'] ? true : false if raw.key?('fail_fast')
-      opts[:full_output] = raw['full_output'] ? true : false if raw.key?('full_output')
-      opts[:seed] = raw['seed'].to_s.strip if raw.key?('seed')
-      if raw.key?('editor')
-        val = raw['editor'].to_s.strip.downcase
+
+      yaml_slice = {}
+      yaml_slice[:format] = raw['format'] if raw.key?('format')
+      yaml_slice[:out_path] = raw['output'] if raw.key?('output')
+      yaml_slice[:out_path] = raw['out_path'] if raw.key?('out_path') && !raw.key?('output')
+      yaml_slice[:example_filter] = raw['example_filter'] if raw.key?('example_filter')
+      yaml_slice[:line_number] = raw['line_number'] if raw.key?('line_number')
+      yaml_slice[:fail_fast] = raw['fail_fast'] if raw.key?('fail_fast')
+      yaml_slice[:full_output] = raw['full_output'] if raw.key?('full_output')
+      yaml_slice[:seed] = raw['seed'] if raw.key?('seed')
+      yaml_slice[:editor] = raw['editor'] if raw.key?('editor')
+      merge_overrides!(opts, yaml_slice)
+    end
+
+    # Merges CLI or normalized option hash into opts (mutates opts). Used by App and YAML scalar fields.
+    # @return [Hash] opts
+    def self.merge_overrides!(opts, overrides)
+      return opts if overrides.nil? || overrides.empty?
+
+      o = overrides
+      if o.key?(:tags) && o[:tags].is_a?(Array)
+        opts[:tags] = o[:tags].map(&:to_s).reject(&:empty?)
+        opts[:tags_str] = opts[:tags].join(', ')
+      end
+      opts[:tags_str] = o[:tags_str].to_s if o.key?(:tags_str)
+      opts[:format] = o[:format].to_s.strip if o.key?(:format) && !o[:format].to_s.strip.empty?
+      opts[:out_path] = o[:out_path].to_s if o.key?(:out_path)
+      opts[:example_filter] = o[:example_filter].to_s if o.key?(:example_filter)
+      opts[:line_number] = o[:line_number].to_s if o.key?(:line_number)
+      opts[:fail_fast] = o[:fail_fast] ? true : false if o.key?(:fail_fast)
+      opts[:full_output] = o[:full_output] ? true : false if o.key?(:full_output)
+      opts[:seed] = o[:seed].to_s.strip if o.key?(:seed)
+      if o.key?(:editor)
+        val = o[:editor].to_s.strip.downcase
         opts[:editor] = val if VALID_EDITORS.include?(val)
       end
       opts

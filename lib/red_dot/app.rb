@@ -3,44 +3,17 @@
 require 'bubbletea'
 require 'lipgloss'
 
+require_relative 'display_row'
+require_relative 'messages'
+require_relative 'fuzzy'
+require_relative 'tui_text'
+
 module RedDot
-  # One row in the file/example list. { type: :file | :example, path, line_number, full_description }.
-  DisplayRow = Struct.new(:type, :path, :line_number, :full_description, keyword_init: true) do
-    def file_row?
-      type == :file
-    end
-
-    def example_row?
-      type == :example
-    end
-
-    # Path to run: path for file, path:line for example.
-    def runnable_path
-      example_row? ? "#{path}:#{line_number}" : path
-    end
-
-    def row_id
-      example_row? ? "#{path}:#{line_number}" : path
-    end
-  end
-
-  # Message sent when an RSpec run has started. Carries pid, stdout IO, JSON path, optional component_root.
-  class RspecStartedMessage < Bubbletea::Message
-    attr_reader :pid, :stdout_io, :json_path, :component_root
-
-    def initialize(pid:, stdout_io:, json_path:, component_root: nil)
-      @pid = pid
-      @stdout_io = stdout_io
-      @json_path = json_path
-      @component_root = component_root
-    end
-  end
-
-  class TickMessage < Bubbletea::Message; end
-
   # Bubbletea model: TUI for browsing and running RSpec.
   class App
     include Bubbletea::Model
+    include FuzzySearch
+    include TuiText
 
     LEFT_PANEL_RATIO = 0.38
     OPTIONS_BAR_HEIGHT = 5
@@ -98,24 +71,7 @@ module RedDot
 
     # Merges overrides into @options (tags, format, out_path, fail_fast, seed, editor, etc.).
     def apply_option_overrides(overrides)
-      return if overrides.nil? || overrides.empty?
-
-      o = overrides
-      if o.key?(:tags) && o[:tags].is_a?(Array)
-        @options[:tags] = o[:tags].map(&:to_s).reject(&:empty?)
-        @options[:tags_str] = @options[:tags].join(', ')
-      end
-      @options[:tags_str] = o[:tags_str].to_s if o.key?(:tags_str)
-      @options[:format] = o[:format].to_s.strip if o.key?(:format) && !o[:format].to_s.strip.empty?
-      @options[:out_path] = o[:out_path].to_s if o.key?(:out_path)
-      @options[:example_filter] = o[:example_filter].to_s if o.key?(:example_filter)
-      @options[:line_number] = o[:line_number].to_s if o.key?(:line_number)
-      @options[:fail_fast] = o[:fail_fast] ? true : false if o.key?(:fail_fast)
-      @options[:full_output] = o[:full_output] ? true : false if o.key?(:full_output)
-      @options[:seed] = o[:seed].to_s if o.key?(:seed)
-      return unless o.key?(:editor) && RedDot::Config::VALID_EDITORS.include?(o[:editor].to_s.strip.downcase)
-
-      @options[:editor] = o[:editor].to_s.strip.downcase
+      Config.merge_overrides!(@options, overrides)
     end
 
     # Handles WindowSizeMessage, RspecStartedMessage, TickMessage, KeyMessage, MouseMessage. Returns [self, nil] or [self, cmd].
@@ -718,25 +674,6 @@ module RedDot
       @grouped.flat_map { |_dir, files| files }
     end
 
-    def fuzzy_match(paths, query)
-      return paths if query.to_s.strip.empty?
-
-      q = query.to_s.downcase
-      paths.select { |path| fuzzy_match_string?(path, q) }
-    end
-
-    def fuzzy_match_string?(str, query)
-      return true if query.to_s.strip.empty?
-
-      q = query.to_s.downcase
-      s = str.to_s.downcase
-      j = 0
-      s.each_char do |c|
-        j += 1 if j < q.length && c == q[j]
-      end
-      j == q.length
-    end
-
     def load_examples_for(path)
       return @examples_by_file[path] if @examples_by_file.key?(path)
 
@@ -1045,42 +982,6 @@ module RedDot
       Process.detach(pid)
     end
 
-    def visible_length(str)
-      str.to_s.gsub(/\e\[[0-9;]*m/, '').length
-    end
-
-    def truncate_line(str, max_w)
-      return str.to_s if visible_length(str) <= max_w
-
-      out = +''
-      len = 0
-      i = 0
-      s = str.to_s
-      while i < s.length
-        if s[i] == "\e" && s[i + 1] == '['
-          j = s.index('m', i)
-          i = j ? j + 1 : s.length
-        else
-          break if len >= max_w
-
-          len += 1
-          out << s[i]
-          i += 1
-        end
-      end
-      out
-    end
-
-    def pad_line(str, width)
-      str.to_s + (' ' * [width - visible_length(str), 0].max)
-    end
-
-    def block_to_size(lines, width, height)
-      truncated = lines.first(height).map { |line| pad_line(truncate_line(line, width), width) }
-      padding = [height - truncated.size, 0].max
-      (truncated + Array.new(padding) { ' ' * width }).join("\n")
-    end
-
     def index_empty?
       @examples_by_file.empty? && ExampleDiscovery.read_cache_file(@working_dir).empty?
     end
@@ -1374,11 +1275,6 @@ module RedDot
           'r: rerun  f: failed  q: quit '
       else ' 1/2/3: panels  q: quit '
       end
-    end
-
-    def truncate_plain(str, max_w)
-      s = str.to_s.gsub(/\e\[[0-9;]*m/, '')
-      s.length <= max_w ? s : s[0, max_w]
     end
   end
 end
