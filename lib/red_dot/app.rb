@@ -9,7 +9,6 @@ require_relative 'fuzzy'
 require_relative 'tui_text'
 
 module RedDot
-  # Bubbletea model: TUI for browsing and running RSpec.
   class App
     include Bubbletea::Model
     include FuzzySearch
@@ -347,7 +346,7 @@ module RedDot
         @cursor = [@cursor, list.size - 1].min
         [self, nil]
       when 'ctrl+t'
-        @selected[row.path] = !@selected[row.path] if row&.file_row?
+        toggle_row_selection(row) if row
         [self, nil]
       when 'enter'
         run_specs(paths_for_run)
@@ -442,7 +441,7 @@ module RedDot
         return [self, nil]
       when 'ctrl+t'
         row = list[@cursor]
-        @selected[row.path] = !@selected[row.path] if row&.file_row?
+        toggle_row_selection(row) if row
         return [self, nil]
       end
       c = nil
@@ -754,13 +753,59 @@ module RedDot
     def paths_for_run
       selected = @selected.select { |_, v| v }.keys
       if selected.any?
-        selected.sort
+        expand_selected_paths_for_run(selected)
       else
         row = display_rows[@cursor]
         if row
           [row.runnable_path]
         else
           @discovery.default_run_all_paths
+        end
+      end
+    end
+
+    # Selected keys are file paths and/or path:line (DisplayRow#row_id). If a whole file is selected,
+    # line-level selections for that file are omitted (see toggle_row_selection).
+    def expand_selected_paths_for_run(keys)
+      file_paths = []
+      line_paths = []
+      keys.each do |k|
+        if k.match?(/\A(.+):(\d+)\z/)
+          line_paths << k
+        else
+          file_paths << k
+        end
+      end
+      file_set = file_paths.to_h { |p| [p, true] }
+      line_paths = line_paths.reject do |lp|
+        m = lp.match(/\A(.+):(\d+)\z/)
+        m && file_set[m[1]]
+      end
+      (file_paths + line_paths).sort
+    end
+
+    def purge_example_selections_for_file(path)
+      stale = @selected.keys.select do |k|
+        k != path && k.match?(/\A#{Regexp.escape(path)}:\d+\z/)
+      end
+      stale.each { |k| @selected.delete(k) }
+    end
+
+    def toggle_row_selection(row)
+      if row.file_row?
+        path = row.path
+        new_val = !@selected[path]
+        purge_example_selections_for_file(path)
+        @selected[path] = new_val
+      else
+        rid = row.row_id
+        path = row.path
+        new_val = !@selected[rid]
+        if new_val
+          @selected[path] = false if @selected[path]
+          @selected[rid] = true
+        else
+          @selected[rid] = false
         end
       end
     end
@@ -1016,7 +1061,8 @@ module RedDot
       list_lines = visible_rows.each_with_index.map do |row, i|
         idx = @file_list_scroll_offset + i
         cursor_here = idx == @cursor
-        line_style = cursor_here ? @cursor_style : (row.file_row? && @selected[row.path] ? @selected_style : Lipgloss::Style.new)
+        selected_row = row.file_row? ? @selected[row.path] : @selected[row.row_id]
+        line_style = cursor_here ? @cursor_style : (selected_row ? @selected_style : Lipgloss::Style.new)
         if row.file_row?
           prefix = cursor_here ? '> ' : '  '
           expand_icon = @expanded_files.include?(row.path) ? '▼ ' : '▶ '
@@ -1024,8 +1070,9 @@ module RedDot
           prefix + expand_icon + check + line_style.render(row.path)
         else
           prefix = cursor_here ? '    > ' : '      '
+          check = @selected[row.row_id] ? @pass_style.render('[x] ') : '[ ] '
           desc = row.full_description.to_s
-          prefix + line_style.render(desc)
+          prefix + check + line_style.render(desc)
         end
       end
       header_lines + list_lines
@@ -1077,7 +1124,7 @@ module RedDot
       [
         (focused_panel == 3 ? @active_title_style.render(title) : @inactive_title_style.render(title)),
         '',
-        @muted_style.render('Select files (Ctrl+T), then Enter or s to run.'),
+        @muted_style.render('Select files or examples (Ctrl+T), then Enter or s to run.'),
         @muted_style.render('a = run all  f = run failed (after failures)'),
         '',
         (@last_result ? "  Last: #{@last_result.summary_line}" : '')

@@ -132,7 +132,7 @@ The TUI uses a layout with numbered panels and a shared status bar:
 
 The TUI stays open until you press `q` or Ctrl+C. You can:
 
-- **File list**: Browse spec files; press **→** to expand a file (list its tests) and **←** to collapse. Press **I** to **index** all spec files (builds a searchable cache with a progress bar; run once so find can match test names without expanding). Select files with **Ctrl+T** (works in find mode too; Space types a space in the find query), run with Enter or `s` (selected), `a` (all), `e` (run at line on a file, or run the focused example when on an example row), `f` (failed, after a run with failures). Use **/** to find; search matches file paths and test names for indexed (or expanded) files — put the cursor on a matched example and press Enter to run just that test. **Esc** or **Enter** exits find and collapses all files. Use **]** to expand all files and  to collapse all.
+- **File list**: Browse spec files; press **→** to expand a file (list its tests) and **←** to collapse. Press **I** to **index** all spec files (builds a searchable cache with a progress bar; run once so find can match test names without expanding). Select files or individual examples with **Ctrl+T** (works in find mode too; Space types a space in the find query), run with Enter or `s` (selected), `a` (all), `e` (run at line on a file, or run the focused example when on an example row), `f` (failed, after a run with failures). Use **/** to find; search matches file paths and test names for indexed (or expanded) files — put the cursor on a matched example and press Enter to run just that test. **Esc** or **Enter** exits find and collapses all files. Use **]** to expand all files and  to collapse all.
 - **Options** (top bar): Always visible. Press `o` to focus; ←/→ or j/k to move, Enter to edit a field or toggle fail-fast; `b` or Esc to unfocus.
 - **Running**: See live RSpec output in the right panel. Press `**3`** to focus the output pane (if you switched to the file list). Use **j/k**, **PgUp/PgDn**, **g/G** to scroll the output; `**2`** to switch back to the file list. Press `**q`** to kill the run and return to the file list.
 - **Results**: In the right panel; j/k to move over failures, `e` to run that single example (path:line), `O` to open that file in your configured editor, `r` to rerun same scope, `f` to rerun only failed examples.
@@ -157,7 +157,7 @@ The TUI stays open until you press `q` or Ctrl+C. You can:
 | ←       | Collapse file (or move to parent file and collapse)                                          |
 | ]       | Expand all files                                                                             |
 | [       | Collapse all files                                                                           |
-| Ctrl+T  | Toggle selection (files only; use in find mode too)                                          |
+| Ctrl+T  | Toggle selection (file or expanded example row; use in find mode too)                        |
 | Enter   | Run selected (or current file/example if none selected)                                      |
 | a       | Run all specs                                                                                |
 | s       | Run selected specs                                                                           |

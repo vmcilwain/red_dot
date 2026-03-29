@@ -263,5 +263,33 @@ RSpec.describe RedDot::App do
         expect(app.send(:display_path_for_result_file, 'spec/foo_spec.rb')).to eq('components/a/spec/foo_spec.rb')
       end
     end
+
+    describe '#expand_selected_paths_for_run' do
+      it 'prefers whole file over line keys for the same file' do
+        expect(app.send(:expand_selected_paths_for_run, %w[spec/a_spec.rb spec/a_spec.rb:10 spec/b_spec.rb:2])).to eq(
+          %w[spec/a_spec.rb spec/b_spec.rb:2]
+        )
+      end
+    end
+
+    describe '#toggle_row_selection' do
+      let(:file_row) { RedDot::DisplayRow.new(type: :file, path: 'spec/foo_spec.rb', line_number: nil, full_description: nil) }
+      let(:example_row) do
+        RedDot::DisplayRow.new(type: :example, path: 'spec/foo_spec.rb', line_number: 10, full_description: 'does x')
+      end
+
+      it 'selecting a file clears line-level keys for that file' do
+        app.send(:instance_variable_set, :@selected, { 'spec/foo_spec.rb:10' => true })
+        app.send(:toggle_row_selection, file_row)
+        expect(app.send(:instance_variable_get, :@selected)).to eq('spec/foo_spec.rb' => true)
+      end
+
+      it 'selecting an example clears whole-file selection for that path' do
+        app.send(:instance_variable_set, :@selected, { 'spec/foo_spec.rb' => true })
+        app.send(:toggle_row_selection, example_row)
+        expect(app.send(:instance_variable_get, :@selected)['spec/foo_spec.rb']).to be false
+        expect(app.send(:instance_variable_get, :@selected)['spec/foo_spec.rb:10']).to be true
+      end
+    end
   end
 end
