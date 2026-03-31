@@ -31,6 +31,25 @@ module RedDot
       {}
     end
 
+    # @return [Integer] number of discovered spec paths with no cache entry or stale mtime
+    # @param spec_discovery [SpecDiscovery]
+    # @param paths [Array<String>, nil] if nil, calls spec_discovery.discover
+    def self.index_stale_count(spec_discovery, paths = nil)
+      paths = spec_discovery.discover if paths.nil?
+      return 0 if paths.empty?
+
+      paths.count do |display_path|
+        ctx = spec_discovery.run_context_for(display_path)
+        get_cached_examples(ctx[:run_cwd], ctx[:rspec_path]).nil?
+      end
+    end
+
+    # True when every discovered spec has a stale cache (same as "never indexed" for a non-empty tree).
+    def self.index_fully_cold?(spec_discovery)
+      paths = spec_discovery.discover
+      paths.any? && index_stale_count(spec_discovery, paths) == paths.size
+    end
+
     # @return [Array<ExampleInfo>, nil] cached examples if mtime matches, else nil
     def self.get_cached_examples(working_dir, path)
       full_path = File.join(working_dir, path)
@@ -40,8 +59,9 @@ module RedDot
       entry = entries[path]
       return nil unless entry
 
+      cached_mtime = entry['mtime'].to_f
       current_mtime = File.mtime(full_path).to_f
-      return nil unless current_mtime == entry['mtime']
+      return nil unless (current_mtime - cached_mtime).abs < 1e-6
 
       (entry['examples'] || []).map do |ex|
         ExampleInfo.new(
@@ -67,25 +87,35 @@ module RedDot
     end
 
     # Runs rspec --dry-run, parses JSON, caches and returns ExampleInfo list.
+    # Always writes the cache when the spec file exists so index staleness clears even when
+    # dry-run yields no/invalid JSON (rspec failure, empty output, etc.).
     def self.discover(working_dir:, path:)
+      full_path = File.join(working_dir, path)
+      return [] unless File.exist?(full_path)
+
       json_path = RspecRunner.run_dry_run(working_dir: working_dir, paths: [path])
+      examples = examples_from_dry_run_json(json_path)
+      write_cached_examples(working_dir, path, examples)
+      examples
+    end
+
+    def self.examples_from_dry_run_json(json_path)
       return [] unless json_path && File.readable?(json_path)
 
       raw = File.read(json_path)
       return [] if raw.strip.empty?
 
       data = JSON.parse(raw)
-      examples = (data['examples'] || []).map do |ex|
+      (data['examples'] || []).map do |ex|
         ExampleInfo.new(
           path: ex['file_path'],
           line_number: ex['line_number'],
           full_description: ex['full_description'].to_s
         )
       end
-      write_cached_examples(working_dir, path, examples)
-      examples
     rescue JSON::ParserError, Errno::ENOENT
       []
     end
+    private_class_method :examples_from_dry_run_json
   end
 end

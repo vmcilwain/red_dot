@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'fileutils'
+require 'json'
 
 RSpec.describe RedDot::App do
   let(:working_dir) { File.expand_path(Dir.mktmpdir('red_dot_app')) }
@@ -255,6 +257,58 @@ RSpec.describe RedDot::App do
         app.send(:toggle_row_selection, example_row)
         expect(app.send(:instance_variable_get, :@selected)['spec/foo_spec.rb']).to be false
         expect(app.send(:instance_variable_get, :@selected)['spec/foo_spec.rb:10']).to be true
+      end
+    end
+
+    describe '#index_stale_hint_line' do
+      let(:working_dir) { File.expand_path(Dir.mktmpdir('red_dot_app_hint')) }
+
+      before do
+        allow(RedDot::SpecDiscovery).to receive(:new).with(working_dir: anything).and_call_original
+        allow(RedDot::Config).to receive(:load).with(working_dir: anything).and_return(options)
+        FileUtils.mkdir_p(File.join(working_dir, 'spec'))
+        File.write(File.join(working_dir, 'spec', 'foo_spec.rb'), '')
+        File.write(File.join(working_dir, 'spec', 'bar_spec.rb'), '')
+      end
+
+      after { FileUtils.rm_rf(working_dir) }
+
+      subject(:app) { described_class.new(working_dir: working_dir) }
+
+      it 'returns cold message when no cache exists' do
+        line = app.send(:index_stale_hint_line)
+        expect(line).to include('No index yet')
+        expect(line).to include('press I')
+      end
+
+      it 'returns incomplete message when only some paths are cached' do
+        cache_path = RedDot::ExampleDiscovery.cache_file_path(working_dir)
+        mtime = File.mtime(File.join(working_dir, 'spec', 'foo_spec.rb')).to_f
+        FileUtils.mkdir_p(File.dirname(cache_path))
+        File.write(
+          cache_path,
+          JSON.generate('entries' => { 'spec/foo_spec.rb' => { 'mtime' => mtime, 'examples' => [] } })
+        )
+        line = app.send(:index_stale_hint_line)
+        expect(line).to include('Index incomplete')
+        expect(line).to include('1 spec file out of date')
+      end
+
+      it 'returns nil when cache is fresh for all specs' do
+        cache_path = RedDot::ExampleDiscovery.cache_file_path(working_dir)
+        mtime_foo = File.mtime(File.join(working_dir, 'spec', 'foo_spec.rb')).to_f
+        mtime_bar = File.mtime(File.join(working_dir, 'spec', 'bar_spec.rb')).to_f
+        FileUtils.mkdir_p(File.dirname(cache_path))
+        File.write(
+          cache_path,
+          JSON.generate(
+            'entries' => {
+              'spec/foo_spec.rb' => { 'mtime' => mtime_foo, 'examples' => [] },
+              'spec/bar_spec.rb' => { 'mtime' => mtime_bar, 'examples' => [] }
+            }
+          )
+        )
+        expect(app.send(:index_stale_hint_line)).to be_nil
       end
     end
   end

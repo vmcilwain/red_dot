@@ -6,6 +6,7 @@ require 'lipgloss'
 require_relative 'config'
 require_relative 'display_row'
 require_relative 'editor_launcher'
+require_relative 'example_discovery'
 require_relative 'messages'
 require_relative 'fuzzy'
 require_relative 'result_paths'
@@ -62,7 +63,6 @@ module RedDot
       @index_files = []
       @index_current = 0
       @index_total = 0
-      @find_index_hint_shown = false
       setup_styles
     end
 
@@ -269,7 +269,7 @@ module RedDot
     def file_list_visible_height(content_h)
       header_count = 2
       header_count += 1 if @find_buffer
-      header_count += 1 if @find_buffer && index_empty? && !@find_index_hint_shown
+      header_count += 1 if index_stale_hint_line
       [content_h - header_count, 1].max
     end
 
@@ -384,11 +384,14 @@ module RedDot
       when 'R'
         refresh_spec_list
         [self, nil]
-      when 'I'
+      when 'I', 'i'
+        sync_spec_files_from_disk
         files = flat_spec_list
         if files.empty?
           [self, nil]
         else
+          max_idx = files.size - 1
+          @cursor = [[@cursor, max_idx].min, 0].max
           @screen = :indexing
           @index_files = files
           @index_current = 0
@@ -972,8 +975,7 @@ module RedDot
     end
 
     def refresh_spec_list
-      @spec_files = @discovery.discover
-      @grouped = @discovery.discover_grouped_by_dir
+      sync_spec_files_from_disk
       @expanded_files = Set.new
       @examples_by_file = {}
       @find_buffer = nil
@@ -981,8 +983,25 @@ module RedDot
       [self, nil]
     end
 
-    def index_empty?
-      @examples_by_file.empty? && ExampleDiscovery.read_cache_file(@working_dir).empty?
+    def sync_spec_files_from_disk
+      @spec_files = @discovery.discover
+      @grouped = @discovery.discover_grouped_by_dir
+    end
+
+    # @return [String, nil] muted hint when the on-disk example index is missing or stale
+    def index_stale_hint_line
+      paths = flat_spec_list
+      return nil if paths.empty?
+
+      stale = ExampleDiscovery.index_stale_count(@discovery, paths)
+      return nil if stale.zero?
+
+      if stale == paths.size
+        '  No index yet — press I to index for test name search.'
+      else
+        noun = stale == 1 ? 'file' : 'files'
+        "  Index incomplete — press I to refresh search index (#{stale} spec #{noun} out of date)."
+      end
     end
 
     def build_file_list_lines(content_h)
@@ -990,10 +1009,8 @@ module RedDot
       title = @find_buffer ? ' 2  Find ' : ' 2  Spec files '
       header_lines << (focused_panel == 2 ? @active_title_style.render(title) : @inactive_title_style.render(title))
       header_lines << @muted_style.render("  Find: #{@find_buffer}_") if @find_buffer
-      if @find_buffer && index_empty? && !@find_index_hint_shown
-        header_lines << @muted_style.render('  No index yet — press I to index for test name search.')
-        @find_index_hint_shown = true
-      end
+      hint = index_stale_hint_line
+      header_lines << @muted_style.render(hint) if hint
       header_lines << ''
       list = display_rows
       if list.empty?
