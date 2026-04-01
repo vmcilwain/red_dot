@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`Border` and `Modal` helpers** for box drawing and centered overlays; options, file list, and main panel render with titled borders and active state.
+- **Context-aware help** (`?`) with modal dismiss; **Tab** cycles panels; output / results / running use panel **0** (replacing panel `3`).
+- **Clear selection**: **Alt+U** and **Ctrl+W** on the file list and in find mode (documented in the help modal).
 - **Screenshot** in the repository for documentation.
 - **`Config.merge_overrides!`**: single entry point for merging CLI- and YAML-style option hashes into options (used by `merge_file` and `App#apply_option_overrides`).
 - **Modular TUI code**: `DisplayRow`, Bubbletea message classes (`RspecStartedMessage`, `TickMessage`, etc.), `FuzzySearch`, and `TuiText` extracted from `App` for clearer structure and tests.
@@ -17,12 +20,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **TUI layout and navigation**: refreshed colors, selection/cursor styles, and status bar copy; options bar height tightened; **main panel widths** (`main_panel_widths`) so left and right columns always sum to the terminal width (output panel stays visible on narrow windows; mouse hit testing uses the same split).
+- **Selected spec rows** use explicit white-on-#106EBE so they match the accent blue instead of terminal reverse video (which broke theme colors).
 - **Selection (Ctrl+T)**: toggles selection on **example** rows (path:line) as well as whole files; selecting a file clears line-level keys for that file; selecting an example clears whole-file selection for that path; run targets dedupe when a file and its examples are both selected.
 - **README**: documents that the **editor** option must be one of the built-in identifiers (not an arbitrary executable path); panel/keybinding text updated for example-level selection.
 - **Internals**: `App` delegates option overrides to `Config`; tag list parsing for YAML `tags_str` goes through `parse_tags`.
 
 ### Fixed
 
+- **Clean shutdown**: `RedDot.run` calls `App#shutdown` after Bubbletea exits so the Listen file watcher and background index thread stop when you quit the TUI (including when Bubbletea raises).
 - **`merge_overrides!`**: when only `tags_str` is supplied (no `tags` array), the `tags` array is updated from the parsed string so options stay consistent.
 - **`parse_tags`**: coerces input with `to_s` before splitting so non-string values do not raise.
 - **`EditorLauncher`**: a failed `Process.spawn` (e.g. missing editor binary) logs a warning instead of crashing the TUI.
