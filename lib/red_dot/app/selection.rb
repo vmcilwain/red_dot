@@ -71,6 +71,10 @@ module RedDot
         max_idx = [full.size - 1, 0].max
         @cursor = [[@cursor, max_idx].min, 0].max
       end
+
+      def clear_selection
+        @selected.clear
+      end
     end
   end
 end

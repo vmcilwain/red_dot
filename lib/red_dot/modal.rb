@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'term_width'
+
 module RedDot
   module Modal
     module_function
@@ -25,7 +27,7 @@ module RedDot
 
     def splice_line(base, overlay_str, col, max_width)
       base_plain = expand_to_plain(base, max_width)
-      over_plain_len = Border.visible_length(overlay_str)
+      over_plain_len = TermWidth.of(overlay_str)
 
       before = base_plain[0, col] || ''
       after_start = col + over_plain_len
@@ -36,8 +38,9 @@ module RedDot
     end
 
     def expand_to_plain(str, width)
-      plain = Border.strip_ansi(str)
-      plain.length < width ? plain + (' ' * (width - plain.length)) : plain[0, width]
+      plain = TermWidth.strip_ansi(str)
+      w = TermWidth.of(plain)
+      w < width ? plain + (' ' * (width - w)) : TermWidth.truncate(plain, width)
     end
   end
 end

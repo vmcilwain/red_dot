@@ -55,6 +55,9 @@ module RedDot
     LEFT_PANEL_RATIO = 0.38
     OPTIONS_BAR_HEIGHT = 3
     STATUS_HEIGHT = 1
+    # ioctl width is often one column larger than the drawable grid in integrated terminals
+    # (Cursor, VS Code), which clips the right border; layout stays inside the visible area.
+    WIDTH_LAYOUT_MARGIN = 1
 
     # @param working_dir [String] project root
     # @param option_overrides [Hash] merged into loaded config (e.g. :tags, :format, :fail_fast)
@@ -176,8 +179,7 @@ module RedDot
     # Full rendered TUI string (bordered panels + status).
     def view
       main_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
-      left_w = [(LEFT_PANEL_RATIO * @width).floor, 24].max
-      right_w = [@width - left_w, 20].max
+      left_w, right_w = main_panel_widths
 
       left_inner_h = [main_h - 2, 1].max
       right_inner_h = left_inner_h
@@ -188,7 +190,7 @@ module RedDot
 
       opts_title = @options_focus ? '1 Options' : 'Options'
       opts_box = Border.render(
-        width: @width, height: OPTIONS_BAR_HEIGHT,
+        width: layout_width, height: OPTIONS_BAR_HEIGHT,
         title: opts_title, lines: options_content,
         active: focused_panel == 1,
         active_style: @active_border_style, inactive_style: @inactive_border_style
@@ -218,7 +220,8 @@ module RedDot
         "#{l}#{r}"
       end
 
-      status = @help_style.render(truncate_plain(status_line, @width).ljust(@width))
+      lw = layout_width
+      status = @help_style.render(truncate_plain(status_line, lw).ljust(lw))
       base = [opts_box, main_rows.join("\n"), status].join("\n")
 
       return render_modal_overlay(base) if @input_prompt || @help_visible
@@ -236,7 +239,7 @@ module RedDot
       @fail_style = Lipgloss::Style.new.foreground('9')
       @warn_style = Lipgloss::Style.new.foreground('11').bold(true)
       @muted_style = Lipgloss::Style.new.foreground('241')
-      @selected_line_style = Lipgloss::Style.new.background('#0D3B66')
+      @selected_line_style = Lipgloss::Style.new.foreground('255').background('#106EBE').bold(true)
       @inactive_selected_style = Lipgloss::Style.new.bold(true)
       @cursor_style = Lipgloss::Style.new.foreground('255').background('#106EBE').bold(true)
     end
@@ -261,7 +264,8 @@ module RedDot
     end
 
     def render_input_modal(base)
-      modal_w = [50, @width - 4].min
+      lw = layout_width
+      modal_w = [50, lw - 4].min
       content = [
         " #{@input_prompt[:message]}#{@input_prompt[:buffer]}_",
         '',
@@ -274,11 +278,12 @@ module RedDot
         active: true,
         active_style: @active_border_style, inactive_style: @inactive_border_style
       )
-      Modal.overlay(base, modal_box, @width, @height, modal_w, modal_h)
+      Modal.overlay(base, modal_box, lw, @height, modal_w, modal_h)
     end
 
     def render_help_modal(base)
-      modal_w = [60, @width - 4].min
+      lw = layout_width
+      modal_w = [60, lw - 4].min
       content = help_content_for_context
       modal_h = [content.size + 2, @height - 4].min
       modal_box = Border.render(
@@ -287,7 +292,7 @@ module RedDot
         active: true,
         active_style: @active_border_style, inactive_style: @inactive_border_style
       )
-      Modal.overlay(base, modal_box, @width, @height, modal_w, modal_h)
+      Modal.overlay(base, modal_box, lw, @height, modal_w, modal_h)
     end
 
     def help_content_for_context
@@ -305,7 +310,8 @@ module RedDot
           @muted_style.render(' File List'),
           ' /        Find            I    Index specs',
           ' →/←      Expand/Collapse ]/[  Expand/Collapse all',
-          ' Ctrl+T   Toggle select   a    Run all',
+          ' Ctrl+T   Toggle select   Alt+U/Ctrl+W  Clear selection',
+          ' a        Run all',
           ' s        Run selected    e    Run example/line',
           ' f        Run failed      O    Open in editor',
           ' o        Focus options   R    Refresh'
@@ -388,6 +394,20 @@ module RedDot
 
     def run_output_visible_height(content_h)
       [content_h - 4, 1].max
+    end
+
+    # Splits the main row into left (file list) + right (output); widths sum to #layout_width.
+    def main_panel_widths
+      w = layout_width
+      return [w, 0] if w < 2
+
+      left_w = (LEFT_PANEL_RATIO * w).floor
+      left_w = [[left_w, 1].max, w - 1].min
+      [left_w, w - left_w]
+    end
+
+    def layout_width
+      [@width - WIDTH_LAYOUT_MARGIN, 1].max
     end
   end
 end

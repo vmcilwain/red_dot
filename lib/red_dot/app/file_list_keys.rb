@@ -61,6 +61,9 @@ module RedDot
         when 'ctrl+t'
           toggle_row_selection(row) if row
           [self, nil]
+        when 'alt+u', 'ctrl+w'
+          clear_selection
+          [self, nil]
         when 'enter', 's' then run_specs(paths_for_run)
         when 'a' then run_specs(flat_spec_list.empty? ? @discovery.default_run_all_paths : flat_spec_list)
         when 'f'

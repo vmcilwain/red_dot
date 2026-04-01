@@ -2,6 +2,8 @@
 
 require 'lipgloss'
 
+require_relative 'term_width'
+
 module RedDot
   module Border
     TL = '╭'
@@ -37,7 +39,7 @@ module RedDot
       end
 
       label = " #{title} "
-      label_visible_len = visible_length(label)
+      label_visible_len = TermWidth.of(label)
       remaining = [inner_w - label_visible_len, 0].max
       line_chars = "#{TL}#{H}#{label}#{H * [remaining - 1, 0].max}#{TR}"
 
@@ -57,9 +59,9 @@ module RedDot
     end
 
     def fit_line(line, width)
-      vlen = visible_length(line)
+      vlen = TermWidth.of(line)
       if vlen > width
-        truncate_to(line, width)
+        TermWidth.truncate(line, width)
       elsif vlen < width
         "#{line}#{' ' * (width - vlen)}"
       else
@@ -67,33 +69,8 @@ module RedDot
       end
     end
 
-    def truncate_to(str, max_w)
-      out = +''
-      len = 0
-      i = 0
-      s = str.to_s
-      while i < s.length
-        if s[i] == "\e" && s[i + 1] == '['
-          j = s.index('m', i)
-          out << s[i..j]
-          i = j ? j + 1 : s.length
-        else
-          break if len >= max_w
-
-          out << s[i]
-          len += 1
-          i += 1
-        end
-      end
-      out
-    end
-
-    def visible_length(str)
-      str.to_s.gsub(/\e\[[0-9;]*m/, '').length
-    end
-
     def strip_ansi(str)
-      str.to_s.gsub(/\e\[[0-9;]*m/, '')
+      TermWidth.strip_ansi(str)
     end
   end
 end

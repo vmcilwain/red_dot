@@ -19,6 +19,11 @@ module RedDot
         end
         return handle_find_nav(key, list) if %w[up down pgup ctrl+u pgdown ctrl+d home end].include?(key)
 
+        if %w[alt+u ctrl+w].include?(key)
+          clear_selection
+          return [self, nil]
+        end
+
         if key == 'ctrl+t'
           row = list[@cursor]
           toggle_row_selection(row) if row

@@ -1,36 +1,22 @@
 # frozen_string_literal: true
 
+require_relative 'term_width'
+
 module RedDot
-  # ANSI-aware width, truncation, and block padding for TUI layout.
+  # ANSI-aware width, truncation, and block padding for TUI layout (display width).
   module TuiText
     def visible_length(str)
-      str.to_s.gsub(/\e\[[0-9;]*m/, '').length
+      TermWidth.of(str)
     end
 
     def truncate_line(str, max_w)
-      return str.to_s if visible_length(str) <= max_w
+      return str.to_s if TermWidth.of(str) <= max_w
 
-      out = +''
-      len = 0
-      i = 0
-      s = str.to_s
-      while i < s.length
-        if s[i] == "\e" && s[i + 1] == '['
-          j = s.index('m', i)
-          i = j ? j + 1 : s.length
-        else
-          break if len >= max_w
-
-          len += 1
-          out << s[i]
-          i += 1
-        end
-      end
-      out
+      TermWidth.truncate(str, max_w)
     end
 
     def pad_line(str, width)
-      str.to_s + (' ' * [width - visible_length(str), 0].max)
+      str.to_s + (' ' * [width - TermWidth.of(str), 0].max)
     end
 
     def block_to_size(lines, width, height)
@@ -41,7 +27,9 @@ module RedDot
 
     def truncate_plain(str, max_w)
       s = str.to_s.gsub(/\e\[[0-9;]*m/, '')
-      s.length <= max_w ? s : s[0, max_w]
+      return s if TermWidth.of(s) <= max_w
+
+      TermWidth.truncate(s, max_w)
     end
   end
 end

@@ -240,6 +240,27 @@ RSpec.describe RedDot::App do
       end
     end
 
+    describe '#main_panel_widths' do
+      it 'sums to layout_width (ioctl width minus margin) for any width' do
+        [12, 42, 80, 120].each do |w|
+          app.send(:instance_variable_set, :@width, w)
+          left, right = app.send(:main_panel_widths)
+          lw = app.send(:layout_width)
+          expect(left + right).to eq(lw)
+          expect(left).to be >= 1
+          expect(right).to be >= 1
+        end
+      end
+    end
+
+    describe '#clear_selection' do
+      it 'empties selected keys' do
+        app.send(:instance_variable_set, :@selected, { 'spec/a.rb' => true })
+        app.send(:clear_selection)
+        expect(app.send(:instance_variable_get, :@selected)).to be_empty
+      end
+    end
+
     describe '#toggle_row_selection' do
       let(:file_row) { RedDot::DisplayRow.new(type: :file, path: 'spec/foo_spec.rb', line_number: nil, full_description: nil) }
       let(:example_row) do

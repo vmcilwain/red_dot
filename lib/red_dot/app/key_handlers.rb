@@ -70,7 +70,7 @@ module RedDot
         return [self, nil] unless message.wheel?
 
         content_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
-        left_w = [(LEFT_PANEL_RATIO * @width).floor, 24].max
+        left_w, = main_panel_widths
         in_spec_list = message.x < left_w && message.y >= OPTIONS_BAR_HEIGHT && message.y < @height - STATUS_HEIGHT
         return [self, nil] unless in_spec_list
 
