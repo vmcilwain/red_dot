@@ -21,6 +21,10 @@ module RedDot
       exit 1
     end
     app = RedDot::App.new(working_dir: working_dir, option_overrides: option_overrides)
-    Bubbletea.run(app, alt_screen: true, mouse_cell_motion: true)
+    begin
+      Bubbletea.run(app, alt_screen: true, mouse_cell_motion: true)
+    ensure
+      app.shutdown
+    end
   end
 end
