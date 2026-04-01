@@ -70,5 +70,21 @@ module RedDot
       Process.wait(pid)
       json_path
     end
+
+    # Runs rspec --dry-run for all paths in a single process. Returns json path.
+    def self.run_dry_run_batch(working_dir:, paths:)
+      json_file = Tempfile.new(['red_dot_batch', '.json'])
+      json_path = json_file.path
+      json_file.close
+      json_file.unlink
+      argv = paths.dup
+      argv << '--dry-run' << '--format' << 'json' << '--out' << json_path
+      env = {}
+      env['BUNDLE_GEMFILE'] = File.join(working_dir, 'Gemfile') if File.file?(File.join(working_dir, 'Gemfile'))
+      cmd = rspec_command(working_dir)
+      pid = Kernel.spawn(env, *cmd, *argv, out: File::NULL, err: File::NULL, chdir: working_dir)
+      Process.wait(pid)
+      json_path
+    end
   end
 end

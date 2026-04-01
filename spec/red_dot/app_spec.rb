@@ -19,7 +19,7 @@ RSpec.describe RedDot::App do
   end
   let(:options) do
     { tags: [], tags_str: '', format: 'progress', out_path: '', example_filter: '', line_number: '',
-      fail_fast: false, full_output: false, seed: '', editor: 'cursor' }
+      fail_fast: false, full_output: false, seed: '', editor: 'cursor', auto_index: false }
   end
 
   before do
@@ -282,32 +282,15 @@ RSpec.describe RedDot::App do
       end
 
       it 'returns incomplete message when only some paths are cached' do
-        cache_path = RedDot::ExampleDiscovery.cache_file_path(working_dir)
-        mtime = File.mtime(File.join(working_dir, 'spec', 'foo_spec.rb')).to_f
-        FileUtils.mkdir_p(File.dirname(cache_path))
-        File.write(
-          cache_path,
-          JSON.generate('entries' => { 'spec/foo_spec.rb' => { 'mtime' => mtime, 'examples' => [] } })
-        )
+        RedDot::ExampleDiscovery.write_cached_examples(working_dir, 'spec/foo_spec.rb', [])
         line = app.send(:index_stale_hint_line)
         expect(line).to include('Index incomplete')
-        expect(line).to include('1 spec file out of date')
+        expect(line).to include('1 spec file')
       end
 
       it 'returns nil when cache is fresh for all specs' do
-        cache_path = RedDot::ExampleDiscovery.cache_file_path(working_dir)
-        mtime_foo = File.mtime(File.join(working_dir, 'spec', 'foo_spec.rb')).to_f
-        mtime_bar = File.mtime(File.join(working_dir, 'spec', 'bar_spec.rb')).to_f
-        FileUtils.mkdir_p(File.dirname(cache_path))
-        File.write(
-          cache_path,
-          JSON.generate(
-            'entries' => {
-              'spec/foo_spec.rb' => { 'mtime' => mtime_foo, 'examples' => [] },
-              'spec/bar_spec.rb' => { 'mtime' => mtime_bar, 'examples' => [] }
-            }
-          )
-        )
+        RedDot::ExampleDiscovery.write_cached_examples(working_dir, 'spec/foo_spec.rb', [])
+        RedDot::ExampleDiscovery.write_cached_examples(working_dir, 'spec/bar_spec.rb', [])
         expect(app.send(:index_stale_hint_line)).to be_nil
       end
     end

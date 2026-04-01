@@ -17,7 +17,8 @@ module RedDot
       fail_fast: false,
       full_output: false,
       seed: '',
-      editor: 'cursor'
+      editor: 'cursor',
+      auto_index: true
     }.freeze
 
     # @return [String] XDG/config or ~/.config/red_dot/config.yml
@@ -64,6 +65,7 @@ module RedDot
       yaml_slice[:full_output] = raw['full_output'] if raw.key?('full_output')
       yaml_slice[:seed] = raw['seed'] if raw.key?('seed')
       yaml_slice[:editor] = raw['editor'] if raw.key?('editor')
+      yaml_slice[:auto_index] = raw['auto_index'] if raw.key?('auto_index')
       merge_overrides!(opts, yaml_slice)
     end
 
@@ -92,6 +94,7 @@ module RedDot
         val = o[:editor].to_s.strip.downcase
         opts[:editor] = val if VALID_EDITORS.include?(val)
       end
+      opts[:auto_index] = o[:auto_index] ? true : false if o.key?(:auto_index)
       opts
     end
 
