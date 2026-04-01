@@ -78,6 +78,9 @@ module RedDot
           refresh_spec_list
           [self, nil]
         when 'I', 'i' then start_background_index(force: key == 'I')
+        when '?'
+          @help_visible = true
+          [self, nil]
         else [self, nil]
         end
       end

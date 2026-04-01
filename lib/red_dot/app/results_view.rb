@@ -6,29 +6,22 @@ module RedDot
       private
 
       def build_results_lines_full_output(content_h)
-        title = ' 3  Results '
-        lines = [(focused_panel == 3 ? @active_title_style.render(title) : @inactive_title_style.render(title)), '']
+        lines = []
         @results_failed_line_indices = []
-        lines << (@last_result ? "  #{@last_result.summary_line}" : @muted_style.render('  No result data.'))
+        lines << (@last_result ? " #{@last_result.summary_line}" : @muted_style.render(' No result data.'))
         lines << ''
         if @run_output.any?
-          lines << @muted_style.render('  Full output:')
-          @run_output.each { |out_line| lines << "  #{out_line}" }
+          @run_output.each { |out_line| lines << " #{out_line}" }
         else
-          lines << @muted_style.render('  (No captured stdout from this run.)')
+          lines << @muted_style.render(' (No captured stdout from this run.)')
         end
-        lines << ''
-        lines << @help_style.render(
-          '  j/k: scroll  PgUp/PgDn  g/G: top/bottom  e: run  O: open  b: back  r: rerun  f: failed  q: quit'
-        )
         paginate_results(lines, content_h)
       end
 
       def build_results_lines(content_h)
         return build_results_lines_full_output(content_h) if @options[:full_output]
 
-        title = ' 3  Results '
-        lines = [(focused_panel == 3 ? @active_title_style.render(title) : @inactive_title_style.render(title)), '']
+        lines = []
         @results_failed_line_indices = []
         if @last_result
           build_results_summary(lines)
@@ -37,32 +30,28 @@ module RedDot
           build_results_slowest_files(lines)
           build_results_failures(lines)
         else
-          lines << @muted_style.render('  No result data.')
+          lines << @muted_style.render(' No result data.')
         end
-        lines << ''
-        lines << @help_style.render(
-          '  j/k: move  PgUp/PgDn: scroll  g/G: top/bottom  e: run  O: open  b: back  r: rerun  f: failed  q: quit'
-        )
         paginate_results(lines, content_h)
       end
 
       def build_results_summary(lines)
         r = @last_result
-        lines << "  #{r.summary_line}"
+        lines << " #{r.summary_line}"
         total = r.examples.size
         pass_pct = total.positive? ? ((r.passed_count.to_f / total) * 100).round : 0
         metrics = ["Pass: #{r.passed_count}/#{total} (#{pass_pct}%)"]
         metrics << "Total: #{format_run_time(r.duration)}" if r.duration.is_a?(Numeric)
         metrics << "Seed: #{r.seed}" if r.seed
-        lines << @muted_style.render("  #{metrics.join('  |  ')}")
+        lines << @muted_style.render(" #{metrics.join('  |  ')}")
         return unless r.errors_outside_of_examples.positive?
 
-        lines << @warn_style.render("  #{r.errors_outside_of_examples} error(s) outside examples (e.g. load/hook failures)")
+        lines << @warn_style.render(" #{r.errors_outside_of_examples} error(s) outside examples")
         return unless @run_output.any?
 
         lines << ''
-        lines << @muted_style.render('  Output:')
-        @run_output.each { |out_line| lines << "    #{out_line}" }
+        lines << @muted_style.render(' Output:')
+        @run_output.each { |out_line| lines << "  #{out_line}" }
         lines << ''
       end
 
@@ -71,16 +60,16 @@ module RedDot
         return unless r.examples_with_run_time.any?
 
         lines << ''
-        lines << @muted_style.render('  Slowest:')
+        lines << @muted_style.render(' Slowest:')
         r.slowest_examples(5).each do |ex|
           loc = [ex.file_path, ex.line_number].compact.join(':')
-          lines << "    #{format_run_time(ex.run_time)}  #{loc} #{ex.description}"
+          lines << "  #{format_run_time(ex.run_time)}  #{loc} #{ex.description}"
         end
         lines << ''
-        lines << @muted_style.render('  Fastest:')
+        lines << @muted_style.render(' Fastest:')
         r.fastest_examples(5).each do |ex|
           loc = [ex.file_path, ex.line_number].compact.join(':')
-          lines << "    #{format_run_time(ex.run_time)}  #{loc} #{ex.description}"
+          lines << "  #{format_run_time(ex.run_time)}  #{loc} #{ex.description}"
         end
         lines << ''
       end
@@ -89,11 +78,11 @@ module RedDot
         r = @last_result
         return unless r.pending_count.positive?
 
-        lines << @muted_style.render('  Pending:')
+        lines << @muted_style.render(' Pending:')
         r.pending_examples.each do |ex|
           loc = [ex.file_path, ex.line_number].compact.join(':')
-          lines << "    #{loc} #{ex.description}"
-          lines << @muted_style.render("      #{ex.pending_message}") if ex.pending_message.to_s.strip != ''
+          lines << "  #{loc} #{ex.description}"
+          lines << @muted_style.render("    #{ex.pending_message}") if ex.pending_message.to_s.strip != ''
         end
         lines << ''
       end
@@ -102,9 +91,9 @@ module RedDot
         r = @last_result
         return unless r.examples_with_run_time.any? && r.slowest_files(5).any?
 
-        lines << @muted_style.render('  Slowest files:')
+        lines << @muted_style.render(' Slowest files:')
         r.slowest_files(5).each do |path, total_sec|
-          lines << "    #{format_run_time(total_sec)}  #{path}"
+          lines << "  #{format_run_time(total_sec)}  #{path}"
         end
         lines << ''
       end
@@ -113,13 +102,13 @@ module RedDot
         r = @last_result
         return unless r.failed_count.positive?
 
-        lines << @muted_style.render('  Failed:')
+        lines << @muted_style.render(' Failed:')
         r.failed_examples.each_with_index do |ex, i|
           @results_failed_line_indices << lines.size
-          prefix = i == @results_cursor ? '> ' : '  '
           loc_path = ResultPaths.display_path_for_result_file(ex.file_path, @last_run_component_root)
-          lines << @fail_style.render("#{prefix}#{loc_path}:#{ex.line_number} #{ex.description}")
-          lines << @muted_style.render("    #{ex.exception_message&.lines&.first&.strip}") if ex.exception_message
+          line_text = " #{loc_path}:#{ex.line_number} #{ex.description}"
+          lines << (i == @results_cursor ? @cursor_style.render(line_text) : @fail_style.render(line_text))
+          lines << @muted_style.render("   #{ex.exception_message&.lines&.first&.strip}") if ex.exception_message
         end
       end
 

@@ -3,12 +3,14 @@
 require 'bubbletea'
 require 'lipgloss'
 
+require_relative 'border'
 require_relative 'config'
 require_relative 'display_row'
 require_relative 'editor_launcher'
 require_relative 'example_discovery'
 require_relative 'file_watcher'
 require_relative 'messages'
+require_relative 'modal'
 require_relative 'fuzzy'
 require_relative 'result_paths'
 require_relative 'tui_text'
@@ -51,7 +53,7 @@ module RedDot
     include FileWatchHandler
 
     LEFT_PANEL_RATIO = 0.38
-    OPTIONS_BAR_HEIGHT = 5
+    OPTIONS_BAR_HEIGHT = 3
     STATUS_HEIGHT = 1
 
     # @param working_dir [String] project root
@@ -99,6 +101,7 @@ module RedDot
       @index_thread = nil
       @file_watcher = nil
       @file_watch_queue = Queue.new
+      @help_visible = false
       setup_styles
     end
 
@@ -170,52 +173,164 @@ module RedDot
       end
     end
 
-    # Full rendered TUI string (options bar + main panels + status).
+    # Full rendered TUI string (bordered panels + status).
     def view
-      content_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
+      main_h = [@height - STATUS_HEIGHT - OPTIONS_BAR_HEIGHT, 5].max
       left_w = [(LEFT_PANEL_RATIO * @width).floor, 24].max
-      center_w = [@width - left_w - 1, 20].max
+      right_w = [@width - left_w, 20].max
 
-      options_bar_lines = build_options_bar_lines
-      left_lines = build_file_list_lines(content_h)
-      center_lines = build_center_panel_lines(content_h)
+      left_inner_h = [main_h - 2, 1].max
+      right_inner_h = left_inner_h
 
-      options_bar = options_bar_lines.map { |line| pad_line(truncate_line(line, @width), @width) }.first(OPTIONS_BAR_HEIGHT)
-      options_bar += Array.new([OPTIONS_BAR_HEIGHT - options_bar.size, 0].max) { ' ' * @width }
+      options_content = build_options_bar_content
+      left_lines = build_file_list_lines(left_inner_h)
+      center_lines = build_center_panel_lines(right_inner_h)
 
-      left_block = block_to_size(left_lines, left_w, content_h)
-      center_block = block_to_size(center_lines, center_w, content_h)
+      opts_title = @options_focus ? '1 Options' : 'Options'
+      opts_box = Border.render(
+        width: @width, height: OPTIONS_BAR_HEIGHT,
+        title: opts_title, lines: options_content,
+        active: focused_panel == 1,
+        active_style: @active_border_style, inactive_style: @inactive_border_style
+      )
 
-      sep_char = '│'
-      sep = [2, 3].include?(focused_panel) ? @active_title_style.render(sep_char) : @inactive_title_style.render(sep_char)
-      left_arr = left_block.split("\n")
-      center_arr = center_block.split("\n")
-      main_rows = content_h.times.map do |i|
+      file_title = @find_buffer ? '2 Find' : '2 Spec files'
+      left_box = Border.render(
+        width: left_w, height: main_h,
+        title: file_title, lines: left_lines,
+        active: focused_panel == 2,
+        active_style: @active_border_style, inactive_style: @inactive_border_style
+      )
+
+      right_title = center_panel_title
+      right_box = Border.render(
+        width: right_w, height: main_h,
+        title: right_title, lines: center_lines,
+        active: focused_panel.zero?,
+        active_style: @active_border_style, inactive_style: @inactive_border_style
+      )
+
+      left_arr = left_box.split("\n")
+      right_arr = right_box.split("\n")
+      main_rows = main_h.times.map do |i|
         l = left_arr[i] || ''.ljust(left_w)
-        c = center_arr[i] || ''.ljust(center_w)
-        "#{l}#{sep}#{c}"
+        r = right_arr[i] || ''.ljust(right_w)
+        "#{l}#{r}"
       end
+
       status = @help_style.render(truncate_plain(status_line, @width).ljust(@width))
-      [options_bar.join("\n"), main_rows.join("\n"), status].join("\n")
+      base = [opts_box, main_rows.join("\n"), status].join("\n")
+
+      return render_modal_overlay(base) if @input_prompt || @help_visible
+
+      base
     end
 
     private
 
     def setup_styles
-      @active_title_style = Lipgloss::Style.new.bold(true).foreground('2')
-      @inactive_title_style = Lipgloss::Style.new.foreground('241')
-      @help_style = Lipgloss::Style.new.foreground('12')
+      @active_border_style = Lipgloss::Style.new.bold(true).foreground('#106EBE')
+      @inactive_border_style = Lipgloss::Style.new.foreground('241')
+      @help_style = Lipgloss::Style.new.foreground('#5A9FD4')
       @pass_style = Lipgloss::Style.new.foreground('2').bold(true)
       @fail_style = Lipgloss::Style.new.foreground('9')
       @warn_style = Lipgloss::Style.new.foreground('11').bold(true)
       @muted_style = Lipgloss::Style.new.foreground('241')
-      @selected_style = Lipgloss::Style.new.foreground('255').background('4')
-      @cursor_style = Lipgloss::Style.new.foreground('255').background('4').bold(true)
+      @selected_line_style = Lipgloss::Style.new.background('#0D3B66')
+      @inactive_selected_style = Lipgloss::Style.new.bold(true)
+      @cursor_style = Lipgloss::Style.new.foreground('255').background('#106EBE').bold(true)
+    end
+
+    def center_panel_title
+      case @screen
+      when :indexing then '0 Indexing'
+      when :running then '0 Running'
+      when :results then '0 Results'
+      else '0 Output'
+      end
+    end
+
+    def render_modal_overlay(base)
+      if @help_visible
+        render_help_modal(base)
+      elsif @input_prompt
+        render_input_modal(base)
+      else
+        base
+      end
+    end
+
+    def render_input_modal(base)
+      modal_w = [50, @width - 4].min
+      content = [
+        " #{@input_prompt[:message]}#{@input_prompt[:buffer]}_",
+        '',
+        @help_style.render(' Enter: run  Esc: cancel')
+      ]
+      modal_h = content.size + 2
+      modal_box = Border.render(
+        width: modal_w, height: modal_h,
+        title: 'Run at line', lines: content,
+        active: true,
+        active_style: @active_border_style, inactive_style: @inactive_border_style
+      )
+      Modal.overlay(base, modal_box, @width, @height, modal_w, modal_h)
+    end
+
+    def render_help_modal(base)
+      modal_w = [60, @width - 4].min
+      content = help_content_for_context
+      modal_h = [content.size + 2, @height - 4].min
+      modal_box = Border.render(
+        width: modal_w, height: modal_h,
+        title: 'Keybindings', lines: content,
+        active: true,
+        active_style: @active_border_style, inactive_style: @inactive_border_style
+      )
+      Modal.overlay(base, modal_box, @width, @height, modal_w, modal_h)
+    end
+
+    def help_content_for_context
+      common = [
+        @muted_style.render(' Navigation'),
+        ' 1/2/0    Focus panel     Tab  Cycle panels',
+        ' j/k      Move up/down    g/G  Top/Bottom',
+        ' PgUp/Dn  Page scroll     ?    This help',
+        ' q        Quit',
+        ''
+      ]
+      case @screen
+      when :file_list
+        common + [
+          @muted_style.render(' File List'),
+          ' /        Find            I    Index specs',
+          ' →/←      Expand/Collapse ]/[  Expand/Collapse all',
+          ' Ctrl+T   Toggle select   a    Run all',
+          ' s        Run selected    e    Run example/line',
+          ' f        Run failed      O    Open in editor',
+          ' o        Focus options   R    Refresh'
+        ]
+      when :results
+        common + [
+          @muted_style.render(' Results'),
+          ' e        Run example     O    Open in editor',
+          ' r        Rerun           f    Run failed',
+          ' b/Esc    Back to files'
+        ]
+      when :running
+        common + [
+          @muted_style.render(' Running'),
+          ' j/k      Scroll output   q    Kill run',
+          ' 2        Back to files'
+        ]
+      else
+        common
+      end
     end
 
     def focused_panel
       return 1 if @options_focus
-      return 3 if @screen == :results || @screen == :running || @screen == :indexing
+      return 0 if @screen == :results || @screen == :running || @screen == :indexing
 
       2
     end
@@ -236,7 +351,7 @@ module RedDot
       when 2
         @options_focus = false
         @screen = :file_list
-      when 3
+      when 0, 3
         @options_focus = false
         if @run_pid
           @screen = :running

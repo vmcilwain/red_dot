@@ -9,6 +9,12 @@ module RedDot
         return handle_input_prompt_key(message) if @input_prompt
 
         key = message.to_s
+
+        if @help_visible
+          @help_visible = false
+          return [self, nil]
+        end
+
         if @screen == :running && @run_pid && ['q', 'ctrl+c'].include?(key)
           kill_run
           @screen = :file_list
@@ -18,8 +24,17 @@ module RedDot
 
         unless @options_editing
           case key
-          when '1', '2', '3'
+          when '1', '2', '0'
             apply_panel_focus_digit(key.to_i)
+            return [self, nil]
+          when 'tab'
+            cycle_panel_focus(:forward)
+            return [self, nil]
+          when 'shift+tab'
+            cycle_panel_focus(:backward)
+            return [self, nil]
+          when '?'
+            @help_visible = true
             return [self, nil]
           end
         end
@@ -38,6 +53,17 @@ module RedDot
         when :results then handle_results_key(key)
         else [self, nil]
         end
+      end
+
+      def cycle_panel_focus(direction)
+        available = [2]
+        available << 0 if @run_pid || @last_result
+        available << 1
+
+        current = focused_panel
+        idx = available.index(current) || 0
+        next_idx = direction == :forward ? (idx + 1) % available.size : (idx - 1) % available.size
+        apply_panel_focus_digit(available[next_idx])
       end
 
       def handle_mouse(message)

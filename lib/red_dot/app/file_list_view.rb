@@ -37,12 +37,9 @@ module RedDot
 
       def build_file_list_header
         lines = []
-        title = @find_buffer ? ' 2  Find ' : ' 2  Spec files '
-        lines << (focused_panel == 2 ? @active_title_style.render(title) : @inactive_title_style.render(title))
-        lines << @muted_style.render("  Find: #{@find_buffer}_") if @find_buffer
+        lines << @muted_style.render(" Find: #{@find_buffer}_") if @find_buffer
         hint = index_stale_hint_line
         lines << @muted_style.render(hint) if hint
-        lines << ''
         lines
       end
 
@@ -65,16 +62,18 @@ module RedDot
       def render_file_list_row(row, idx)
         cursor_here = idx == @cursor
         selected_row = row.file_row? ? @selected[row.path] : @selected[row.row_id]
-        line_style = cursor_here ? @cursor_style : (selected_row ? @selected_style : Lipgloss::Style.new)
         if row.file_row?
-          prefix = cursor_here ? '> ' : '  '
           expand_icon = @expanded_files.include?(row.path) ? '▼ ' : '▶ '
-          check = @selected[row.path] ? @pass_style.render('[x] ') : '[ ] '
-          prefix + expand_icon + check + line_style.render(row.path)
+          text = " #{expand_icon}#{row.path}"
         else
-          prefix = cursor_here ? '    > ' : '      '
-          check = @selected[row.row_id] ? @pass_style.render('[x] ') : '[ ] '
-          prefix + check + line_style.render(row.full_description.to_s)
+          text = "   #{row.full_description}"
+        end
+        if cursor_here
+          @cursor_style.render(text)
+        elsif selected_row
+          @selected_line_style.render(text)
+        else
+          text
         end
       end
     end
